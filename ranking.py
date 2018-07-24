@@ -8,7 +8,7 @@ from functools import reduce
 from bs4 import BeautifulSoup
 from urllib import request
 
-from moviedata import get_movie_info
+from meta_filters import apply_meta_filters, apply_sorting
 
 
 def calculate_avg(ratings, minimum, mean_total=0, mode="std"):
@@ -82,8 +82,7 @@ def add_rating_difference(df):
 
 
 def summarize_ratings(df, weighting=None, min_rating=3.75, watched=None,
-                      on_watchlist=None, metadata=True, min_year=None,
-                      max_year=None, genre=None, nx_filter=False):
+                      on_watchlist=None):
     default_user = open('your_username.txt', 'r').read()
 
     if watched == "y":
@@ -130,40 +129,6 @@ def summarize_ratings(df, weighting=None, min_rating=3.75, watched=None,
     # Clean up
     df = df.drop_duplicates(subset=["title"])
 
-    if metadata:
-        # Retrieve all the metadata
-        df = df.apply(get_movie_info, axis=1)
-
-        # Remove NaN-year entries
-        df = df.dropna(subset=['year'], how='any')
-        df["year"] = df["year"].apply(int)
-
-        # Filter by year
-        if min_year or max_year:
-            df = df.loc[(df["year"] >= min_year) & (df["year"] <= max_year)]
-
-        # Filter by genre
-        if genre:
-            df = df.loc[df["genres"].apply(lambda x: genre in x)]
-
-        # Sort/Filter by LB avg/logs
-        # df = df.loc[df["lb_rating"] > 3.3]
-        # df = df.loc[(df["lb_logs"] < 10000) & (df["lb_logs"] > 1000)]
-        # df = df.sort_values("lb_logs")
-
-        if nx_filter:
-            flixable_list = list(filter(None,
-                                 set(open('netflix/flixable_all.txt',
-                                          'r').read().split('\n'))))
-            df = df.loc[df["IMDb_ID"].isin(flixable_list)]
-
-        # Select columns
-        df = df[["title", "year", "nw_rating", "nw_logs", "lb_rating",
-                 "lb_logs", "genres"]]
-
-    else:
-        df = df[["title", "nw_rating", "nw_logs"]]
-
     return df
 
 
@@ -173,43 +138,88 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-b", "--b_weighting", help="bayesian weighting",
                         default=None, type=float, dest='bw')
-    parser.add_argument("-m", "--meta", help="metadata", default=False,
-                        action='store_true', dest='meta')
     parser.add_argument("-r", "--minr", help="min_rating", default=3.75,
                         type=float, dest='minr')
     parser.add_argument("-w", "--watched", help="y/n", default=None,
                         type=str, dest='watched')
-    #parser.add_argument("-ow", "--on_watchlist", help="y/n", default=None,
-    #                    type=str, dest='ow')
-    parser.add_argument("-miny", "--min_year", help="min_year", default=1890,
-                        type=int, dest='miny')
-    parser.add_argument("-maxy", "--max_year", help="max_year", default=2020,
-                        type=int, dest='maxy')
-    parser.add_argument("-g", "--genre", help="genre", default=None,
-                        type=str, dest='genre')
+    parser.add_argument("-ow", "--on_watchlist", help="y/n", default=None,
+                        type=str, dest='ow')
     parser.add_argument("-o", "--out", help="output format (csv/net),\
                         None prints to terminal (by default)", default=None,
                         type=str, dest='out')
     parser.add_argument("-d", "--date",
                         help="date (up to when ratings should be considered)",
                         default=today, type=str, dest='dt')
-    #parser.add_argument("-nx", "--netflix_filter", default=False,
-    #                    action='store_true', dest='nx')
+
+    # Metadata flags
+    parser.add_argument("-m", "--meta", help="metadata", default=False,
+                        action='store_true', dest='meta')
+    parser.add_argument('-lbr', "--min_lb_rating",
+                        help="minimum rating on LB", default=None,
+                        type=float, dest='lbr')
+    parser.add_argument('-minlbl', "--min_lb_logs",
+                        help="minimum number of logs on LB", default=None,
+                        type=int, dest='minlbl')
+    parser.add_argument('-maxlbl', "--max_lb_logs",
+                        help="maximum number of logs on LB", default=None,
+                        type=int, dest='maxlbl')
+    parser.add_argument("-miny", "--min_year", help="earliest year",
+                        default=1890, type=int, dest='miny')
+    parser.add_argument("-maxy", "--max_year", help="latest year",
+                        default=2020, type=int, dest='maxy')
+    parser.add_argument("-mint", "--min_runtime", help="minimum runtime",
+                        default=None, type=int, dest='mint')
+    parser.add_argument("-maxt", "--max_runtime", help="maximum runtime",
+                        default=None, type=int, dest='maxt')
+    parser.add_argument("-g", "--genre", help="filter by genre", default=None,
+                        type=str, dest='gen')
+    parser.add_argument("-ac", "--actor", help="filter by actor",
+                        default=None, type=str, dest='ac')
+    parser.add_argument("-di", "--director", help="filter by director",
+                        default=None, type=str, dest='di')
+    parser.add_argument("-pro", "--producer", help="filter by producer",
+                        default=None, type=str, dest='pro')
+    parser.add_argument("-wr", "--writer", help="filter by writer",
+                        default=None, type=str, dest='wr')
+    parser.add_argument("-ed", "--editor", help="filter by editor",
+                        default=None, type=str, dest='ed')
+    parser.add_argument("-ci", "--cinematography",
+                        help="filter by cinematography",
+                        default=None, type=str, dest='ci')
+    parser.add_argument("-com", "--composer", help="filter by composer",
+                        default=None, type=str, dest='com')
+    parser.add_argument("-stu", "--studio", help="filter by studio",
+                        default=None, type=str, dest='stu')
+    parser.add_argument("-cou", "--country", help="filter by country",
+                        default=None, type=str, dest='cou')
+    parser.add_argument("-lang", "--language", help="filter by language",
+                        default=None, type=str, dest='lang')
+
+    # Sorting flags
     # TODO
-    # min_logs, max_logs, min_lbr
 
     args = parser.parse_args()
 
-    if (args.out == 'net') or (args.genre):
-        args.meta = True
-    if args.minr < 3.3:
-        args.meta = False
-
     df = collect_from_users(args.dt)
     df = summarize_ratings(df, weighting=args.bw, min_rating=args.minr,
-                           watched=args.watched, on_watchlist=args.ow,
-                           metadata=args.meta, min_year=args.miny,
-                           max_year=args.maxy, genre=args.genre,
-                           nx_filter=args.nx)
+                           watched=args.watched, on_watchlist=args.ow)
+
+    if args.meta:
+        df = apply_meta_filters(df, min_lb_rating=args.lbr,
+                                min_lb_logs=args.minlbl,
+                                max_lb_logs=args.maxlbl,
+                                min_year=args.miny, max_year=args.maxy,
+                                min_runtime=args.mint, max_runtime=args.maxt,
+                                genre=args.gen, actor=args.ac,
+                                director=args.di, producer=args.pro,
+                                writer=args.wr, editor=args.ed,
+                                cinematography=args.ci, composer=args.com,
+                                studio=args.stu, country=args.cou,
+                                language=args.lang)
+        # Select columns
+        df = df[["title", "year", "nw_rating", "nw_logs", "lb_rating",
+                 "lb_logs"]]
+    else:
+        df = df[["title", "nw_rating", "nw_logs"]]
 
     write_list_to_csv_or_txt(df, args.dt, output_format=args.out)

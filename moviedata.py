@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+from collections import defaultdict
 
 
 def get_movie_info(df):
@@ -35,26 +36,38 @@ def get_movie_info(df):
     # GENRES
     try:
         tab_genres = soup.find('div', id='tab-genres').find_all('a')
-        df["genres"] = [t.text.strip() for t in tab_genres]
+        df["genre"] = [t.text.strip() for t in tab_genres]
     except AttributeError:
-        df["genres"] = [""]
+        df["genre"] = [""]
 
     # RUNTIME
     df["runtime"] = soup.find('p', class_='text-link').text.split()[0]
 
-    # DIRECTOR
-    try:
-        df["director"] = soup.find('span', class_='prettify').text.strip()
-    except AttributeError:
-        df["director"] = None
+    # ACTORS, DIRECTOR, PRODUCERS, WRITER, EDITOR, CINEMATOGRAPHY, COMPOSER
+    # STUDIOS, COUNTRY, LANGUAGES
+    slugs = [a for a in (sl.find_all('a') for sl in soup.find_all(
+        'div', class_='text-sluglist')) if a]
+    slugdict = defaultdict(list)
+    for slug in slugs:
+        for link in slug:
+            try:
+                lpart = link['href'][1:][:-1]
+            except KeyError:
+                continue
+            if lpart.startswith('films'):
+                lpart = lpart[6:]
+                if lpart.startswith('genre'):
+                    continue
+            k, v = lpart.split('/')
+            slugdict[k].append(v)
+    for k, v in slugdict.items():
+        df[k] = v
 
-    # ACTORS
-    # LANGUAGES
-    # COUNTRIES
-
+    # IMDb ID
     for link in soup.find_all('a'):
         if link.text.strip() == "IMDb":
-            df["IMDb_ID"] = "tt"+link['href'].split('/title/')[1].strip('/maindetails')
+            df["IMDb_ID"] = "tt"+link['href'].split(
+                '/title/')[1].strip('/maindetails')
             break
 
     return df
