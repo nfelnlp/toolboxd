@@ -44,11 +44,12 @@ This will put out a csv file including all movies ever logged by users you follo
 The three columns are `[movie title],[network rating],[network number of logs]`.
 
 `ranking.py` also has other options available:
+- `-r [rating]` : The minimum rating down to which value you want the resulting list to go. By default, this is `3.75`.
 - `-w y` : Only consider movies you already logged.
 - `-w n` : Filter movies you already logged.
-- `-r [rating]` : The minimum rating down to which value you want the resulting list to go. By default, this is `3.75`.
-- `-o [csv/net]` : Without the `-o` flag, the list is simply printed to your terminal in full.
-- `-b [weight]` : Choose weighting for bayesian averaging. Right now, the bayesian averaging is the only option for ranking movies, but you can change the way lesser known movies (those with only a few logs) are "punished" for being unpopular. The default is the number of users in your network divided by 100.
+- `-mode [std/bayesian]` : Choose mode of rating value calculation. `std` is the naive way where the sum of rating values is divided by the number of ratings. By default, this is `bayesian` where movies with few logs get punished.
+- `-b [weight]` : Choose weighting for bayesian averaging. The default is the number of users in your network divided by 100. This has no effect when `mode` is set to `std`.
+- `-o [csv/net]` : Without the `-o` flag, the list is simply printed to your terminal in full. `csv` saves the list to a file with the columns mentioned above. See below for `net`.
 - `-d [date]` : Date up to when ratings should be considered. This is useful for producing rankings from previous updates.
 
 
@@ -70,6 +71,7 @@ Now you can use the following flags with `ranking.py`:
 - `-mint [runtime in min]` : Minimum runtime of a movie.
 - `-maxt [runtime in min]` : Maximum runtime of a movie.
 - `-g [genre]` : Filter by genre, e.g. `"science fiction"` or `action`.
+
 For the following flags, please follow the letterboxd URL, so it's best to include hyphens instead of spaces:
 - `-ac [actor]` : Filter by actor, e.g. `nicolas-cage`
 - `-di [director]` : Filter by director, e.g. `stanley-kubrick`
@@ -99,13 +101,25 @@ to generate a `network` csv file which can be imported to Letterboxd.
 
 ## Update movie ratings
 
-Coming soon.
-
-This is only for updating the ratings in case they changed after a rewatch or adding the rating few days after simply logging it (rating 0). `ratings.py` will be your friend for downloading new logs.
+```
+python3 ratings.py -c
+```
+The `-c` flag is for updating the ratings in case they changed after a rewatch or adding the rating few days after simply logging it (rating 0). It makes absolutely sure that no movie is ignored and also keeps the ratings in case someone deleted them (to 0).
 
 
 ## Find out popular movies with your friends since last update
 
+When you execute `ratings.py` for a second time a few days after, you most likely have new logs from your friends. In order to see what movies changed the most, run
+```
+python3 movements.py
+```
+
+
+## Download your watchlist or other lists on Letterboxd
+
 Coming soon.
 
-When you execute `ratings.py` for a second time a few days after, you most likely have new logs from your friends.
+
+## See how close your taste in movies is to your friends
+
+Coming soon(TM).

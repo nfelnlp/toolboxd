@@ -62,6 +62,7 @@ def add_user_to_network(user, list_type, date, user_path=None):
 
 
 def update_user(user, list_type, date):
+    print(">>> {}".format(user))
     files = sorted(os.listdir('user/{}/'.format(user)), reverse=True)
     recent_csv = 'user/{}/{}'.format(user, files[0])
 
@@ -110,10 +111,78 @@ def update_user(user, list_type, date):
         os.remove(new_csv)
 
     if new_num > 0:
-        print("Found {} new movies for {}.\n".format(new_num, user))
-        # os.rename(recent_csv, 'user/{}/{}_{}.csv'.format(user, user, date))
+        print("Found {} new logs..\n".format(new_num))
     else:
-        print("Checked {}. No changes.\n".format(user))
+        print("No new logs.\n")
+
+
+def check_ratings(user_folder, initial_retrieval_date):
+    # Check if ratings have changed
+    list_parts = []
+    for user_csv in sorted(os.listdir('user/{}'.format(user_folder))):
+        list_parts.append(pd.read_csv('user/{}/{}'.format(
+            user_folder, user_csv), sep=r'\t', names=["title", user_folder],
+            engine='python'))
+        last_csv_date = user_csv.split('_')[-1].strip('.csv')
+    db = pd.concat(list_parts, ignore_index=True).drop_duplicates(
+        subset='title', keep='last').reset_index(drop=True)
+
+    page_num = 1
+    rating_time = '2018-04-30'
+    while True:
+        lb_url = 'http://letterboxd.com'
+        with request.urlopen('{}/{}/films/ratings/page/{}'.format(
+                lb_url, user_folder, page_num)) as response:
+            html = response.read()
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Find all movie posters / links on this page
+            movie_li = [lm for lm in soup.find_all(
+                'li', class_='poster-container')]
+
+            for mov in movie_li:
+                # Retrieve metadata for each rating/movie
+                rating_time = mov.find('time')['datetime'].split('T')[0]
+
+                if rating_time < last_csv_date:
+                    this_user_rating = mov.find(
+                        'meta', itemprop='ratingValue')['content']
+                    mov_str = mov.div['data-target-link'].split('/')[2]
+
+                    # Check with database
+                    try:
+                        db_r = db[db['title'] == mov_str][user_folder].iloc[0]
+                        if (
+                                int(db_r) != int(this_user_rating)
+                                and int(this_user_rating) != 0
+                                and rating_time > initial_retrieval_date):
+                            print("\tUpdated {} (Rating: {}), "
+                                  "previous rating was {} in csv {}.".format(
+                                    mov_str, this_user_rating, db_r,
+                                    rating_time))
+                            with open('user/{}/{}_{}.csv'.format(
+                                    user_folder, user_folder, rating_time),
+                                    'a+') as wcsv:
+                                writer = csv.writer(wcsv, delimiter='\t',
+                                                    quotechar='|',
+                                                    quoting=csv.QUOTE_MINIMAL)
+                                writer.writerow([mov_str, this_user_rating])
+
+                    except IndexError:
+                        print(mov_str)
+                        print("\tDid not find this movie in the database. "
+                              "Added with {} rating.".format(this_user_rating))
+                        with open('user/{}/{}_{}.csv'.format(
+                                user_folder, user_folder, rating_time),
+                                'a+') as wcsv:
+                            writer = csv.writer(wcsv, delimiter='\t',
+                                                quotechar='|',
+                                                quoting=csv.QUOTE_MINIMAL)
+                            writer.writerow([mov_str, this_user_rating])
+
+        page_num += 1
+        if rating_time < initial_retrieval_date:
+            break
 
 
 def traverse_network(from_user, date, start=None):
@@ -138,19 +207,30 @@ def traverse_network(from_user, date, start=None):
 
 
 if __name__ == "__main__":
-    date = datetime.date.today()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-u", "--from_user", help="your username",
+                        default=None, type=str, dest='user')
+    parser.add_argument("-c", "--check", help="double check existing ratings",
+                        default=False, action="store_true", dest='check')
+    args = parser.parse_args()
 
+    date = datetime.date.today()
     ufile = 'your_username.txt'
-    if not os.path.isfile(ufile):
-        parser = argparse.ArgumentParser()
-        parser.add_argument("-u", "--from_user", help="your username",
-                            required=True, type=str, dest='user')
-        args = parser.parse_args()
-        network = traverse_network(args.user, date)
+    if os.path.isfile(ufile):
+        user = open(ufile, 'r').read()
+
+    if args.user is not None:
+        user = args.user
+
+    if not user:
+        raise ValueError("No user specified.")
     else:
-        network = traverse_network(open(ufile, 'r').read(), date)
+        print("Username: {}".format(user))
+
+    network = traverse_network(user, date)
 
     for friend in reversed(network):
+        print("")
         if not os.path.exists('user/{}'.format(friend)):
             os.makedirs('user/{}'.format(friend))
             print("Creating new folder and retrieving all ratings for\
@@ -159,3 +239,10 @@ if __name__ == "__main__":
 
         else:
             update_user(friend, 'films/by/date', date)
+            if args.check:
+                # Get initial retrieval date
+                ini_rd = sorted(list(os.listdir(
+                    'user/{}'.format(
+                        friend))))[0].strip('.csv').split('_')[-1]
+                check_ratings(friend, ini_rd)
+        print("___________")

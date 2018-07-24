@@ -35,8 +35,8 @@ def apply_meta_filters(df, min_lb_rating=None, min_lb_logs=None,
 
     # Filter by runtime
     if min_runtime or max_runtime:
-        df = df.loc[df["runtime"] >= min_runtime & (
-                    df["runtime"] <= max_runtime)]
+        df = df.loc[(df["runtime"] >= min_runtime) & (
+                     df["runtime"] <= max_runtime)]
 
     # Filter by string
     sf_dict = {"genre": genre,

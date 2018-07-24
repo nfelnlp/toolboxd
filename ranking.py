@@ -11,7 +11,7 @@ from urllib import request
 from meta_filters import apply_meta_filters, apply_sorting
 
 
-def calculate_avg(ratings, minimum, mean_total=0, mode="std"):
+def calculate_avg(ratings, minimum=0, mean_total=0, mode="std"):
     # Remove 0 ratings
     ratings = [x for x in ratings if x != 0]
 
@@ -81,52 +81,55 @@ def add_rating_difference(df):
     return df.sort_values("diff", ascending=False)
 
 
-def summarize_ratings(df, weighting=None, min_rating=3.75, watched=None,
-                      on_watchlist=None):
+def summarize_ratings(df, min_rating=3.75, watched=None,
+                      rating_mode="bayesian", weighting=None):
     default_user = open('your_username.txt', 'r').read()
 
+    # Watched filter
     if watched == "y":
         df = df.loc[df[default_user].notnull()]
     elif watched == "n":
         df = df.loc[df[default_user].isnull()]
 
-    #if on_watchlist == "y":
-    #    df = df.loc[df["_WL_nfel"].notnull()]
-    #elif on_watchlist == "n":
-    #    df = df.loc[df["_WL_nfel"].isnull()]
-
-    #df = df.drop(["_WL_nfel"], axis=1)  # Leave out watchlist
     df = df.drop([default_user], axis=1)  # Leave out own rating
 
+    # Generate ratings lists and number of logs in network
     df["ratings"] = df.drop(["title"], axis=1).values.tolist()
     df["ratings"] = df["ratings"].apply(
         lambda y: [int(a) for a in y if pd.notnull(a)])
     df["nw_logs"] = df["ratings"].apply(len)
 
-    if weighting:
-        b_weighting = weighting
+    # Rating mode (average / bayesian)
+    if rating_mode == "bayesian":
+        if weighting:
+            b_weighting = weighting
+        else:
+            b_weighting = 1/100 * len(df.drop(["title", "nw_logs", "ratings"],
+                                              axis=1).keys())
+        df["avg"] = df["ratings"].apply(calculate_avg, minimum=b_weighting,
+                                        mode=rating_mode)
+        mean_total = df["avg"].mean()
+
+        df["nw_rating"] = df["ratings"].apply(calculate_avg,
+                                              minimum=b_weighting,
+                                              mean_total=mean_total,
+                                              mode=rating_mode)
+    elif rating_mode == "std":
+        df["nw_rating"] = df["ratings"].apply(calculate_avg,
+                                              mode=rating_mode)
     else:
-        b_weighting = 1/100 * len(df.drop(["title", "nw_logs", "ratings"],
-                                          axis=1).keys())
+        raise ValueError("No valid rating mode")
 
-    df["avg"] = df["ratings"].apply(calculate_avg, minimum=b_weighting,
-                                    mode="bayesian")
-
-    mean_total = df["avg"].mean()
-    df["nw_rating"] = df["ratings"].apply(calculate_avg, minimum=b_weighting,
-                                          mean_total=mean_total,
-                                          mode="bayesian")
-    # Tiebreaker for sorting
+    # Tiebreaker for sorting: Number of logs
     df = df[["title", "nw_rating", "nw_logs"]].sort_values("nw_logs",
                                                            ascending=False)
-
     # Sort by rating of network
     df = df.sort_values("nw_rating", ascending=False)
 
     # Filter by rating
     df = df[df["nw_rating"] > min_rating]
 
-    # Clean up
+    # Clean up: Remove duplicates
     df = df.drop_duplicates(subset=["title"])
 
     return df
@@ -136,14 +139,15 @@ if __name__ == "__main__":
     today = datetime.date.today()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-b", "--b_weighting", help="bayesian weighting",
-                        default=None, type=float, dest='bw')
     parser.add_argument("-r", "--minr", help="min_rating", default=3.75,
                         type=float, dest='minr')
     parser.add_argument("-w", "--watched", help="y/n", default=None,
                         type=str, dest='watched')
-    parser.add_argument("-ow", "--on_watchlist", help="y/n", default=None,
-                        type=str, dest='ow')
+    parser.add_argument("-mode", "--rating_mode",
+                        help="average or bayesian",
+                        default="bayesian", type=str, dest='mode')
+    parser.add_argument("-b", "--b_weighting", help="bayesian weighting",
+                        default=None, type=float, dest='bw')
     parser.add_argument("-o", "--out", help="output format (csv/net),\
                         None prints to terminal (by default)", default=None,
                         type=str, dest='out')
@@ -155,22 +159,22 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--meta", help="metadata", default=False,
                         action='store_true', dest='meta')
     parser.add_argument('-lbr', "--min_lb_rating",
-                        help="minimum rating on LB", default=None,
+                        help="minimum rating on LB", default=0,
                         type=float, dest='lbr')
     parser.add_argument('-minlbl', "--min_lb_logs",
-                        help="minimum number of logs on LB", default=None,
+                        help="minimum number of logs on LB", default=0,
                         type=int, dest='minlbl')
     parser.add_argument('-maxlbl', "--max_lb_logs",
-                        help="maximum number of logs on LB", default=None,
+                        help="maximum number of logs on LB", default=10000000,
                         type=int, dest='maxlbl')
     parser.add_argument("-miny", "--min_year", help="earliest year",
                         default=1890, type=int, dest='miny')
     parser.add_argument("-maxy", "--max_year", help="latest year",
                         default=2020, type=int, dest='maxy')
     parser.add_argument("-mint", "--min_runtime", help="minimum runtime",
-                        default=None, type=int, dest='mint')
+                        default=0, type=int, dest='mint')
     parser.add_argument("-maxt", "--max_runtime", help="maximum runtime",
-                        default=None, type=int, dest='maxt')
+                        default=10000, type=int, dest='maxt')
     parser.add_argument("-g", "--genre", help="filter by genre", default=None,
                         type=str, dest='gen')
     parser.add_argument("-ac", "--actor", help="filter by actor",
@@ -201,8 +205,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     df = collect_from_users(args.dt)
-    df = summarize_ratings(df, weighting=args.bw, min_rating=args.minr,
-                           watched=args.watched, on_watchlist=args.ow)
+    df = summarize_ratings(df, min_rating=args.minr, watched=args.watched,
+                           rating_mode=args.mode, weighting=args.bw)
 
     if args.meta:
         df = apply_meta_filters(df, min_lb_rating=args.lbr,

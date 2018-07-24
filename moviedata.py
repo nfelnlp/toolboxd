@@ -41,7 +41,11 @@ def get_movie_info(df):
         df["genre"] = [""]
 
     # RUNTIME
-    df["runtime"] = soup.find('p', class_='text-link').text.split()[0]
+    runtime_str = soup.find('p', class_='text-link').text.split()[0]
+    if runtime_str == "More":
+        df["runtime"] = 0
+    else:
+        df["runtime"] = int(runtime_str.replace(',', ''))
 
     # ACTORS, DIRECTOR, PRODUCERS, WRITER, EDITOR, CINEMATOGRAPHY, COMPOSER
     # STUDIOS, COUNTRY, LANGUAGES
