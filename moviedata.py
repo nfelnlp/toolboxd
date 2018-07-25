@@ -17,15 +17,15 @@ def get_movie_info(df):
 
     # AVG RATING BY LETTERBOXD USERS
     try:
-        df["lb_rating"] = float((soup.find(
+        df["lrating"] = float((soup.find(
             attrs={'name': 'twitter:data2'})['content']).split()[0])
     except TypeError:
-        df["lb_rating"] = None
+        df["lrating"] = None
 
     # NUMBER OF LETTERBOXD USERS WHO WATCHED IT
     logs_str = soup.find('li', class_='filmstat-watches').find(
         'a')['title'].split()[2]
-    df["lb_logs"] = int(logs_str.replace(',', ''))
+    df["llogs"] = int(logs_str.replace(',', ''))
 
     # RELEASE YEAR
     try:

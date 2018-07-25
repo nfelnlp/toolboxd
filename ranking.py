@@ -8,7 +8,8 @@ from functools import reduce
 from bs4 import BeautifulSoup
 from urllib import request
 
-from meta_filters import apply_meta_filters, apply_sorting
+from meta_filters import apply_meta_filters
+from sorting import apply_sorting
 
 
 def calculate_avg(ratings, minimum=0, mean_total=0, mode="std"):
@@ -63,12 +64,12 @@ def collect_from_users(changes_from):
 def write_list_to_csv_or_txt(df, date, output_format=None):
     if output_format == 'net':
         filename = 'lists/network_{}.csv'.format(date)
-        df[["title", "year", "nw_rating"]].to_csv(
+        df[["title", "year", "nrating"]].to_csv(
             filename, sep=',', index=False)
         print("Created Letterboxd-importable file {}.".format(filename))
     elif output_format == 'csv':
         filename = 'lists/all_{}.csv'.format(date)
-        df[["title", "nw_rating", "nw_logs"]].to_csv(
+        df[["title", "nrating", "nlogs"]].to_csv(
             filename, sep='\t', index=False,
             header=False)
         print("Created csv file {}.".format(filename))
@@ -77,7 +78,7 @@ def write_list_to_csv_or_txt(df, date, output_format=None):
 
 
 def add_rating_difference(df):
-    df["diff"] = df.apply(lambda x: x["nw_rating"] - x["lb_rating"], axis=1)
+    df["diff"] = df.apply(lambda x: x["nrating"] - x["lrating"], axis=1)
     return df.sort_values("diff", ascending=False)
 
 
@@ -97,37 +98,37 @@ def summarize_ratings(df, min_rating=3.75, watched=None,
     df["ratings"] = df.drop(["title"], axis=1).values.tolist()
     df["ratings"] = df["ratings"].apply(
         lambda y: [int(a) for a in y if pd.notnull(a)])
-    df["nw_logs"] = df["ratings"].apply(len)
+    df["nlogs"] = df["ratings"].apply(len)
 
     # Rating mode (average / bayesian)
     if rating_mode == "bayesian":
         if weighting:
             b_weighting = weighting
         else:
-            b_weighting = 1/100 * len(df.drop(["title", "nw_logs", "ratings"],
+            b_weighting = 1/100 * len(df.drop(["title", "nlogs", "ratings"],
                                               axis=1).keys())
         df["avg"] = df["ratings"].apply(calculate_avg, minimum=b_weighting,
                                         mode=rating_mode)
         mean_total = df["avg"].mean()
 
-        df["nw_rating"] = df["ratings"].apply(calculate_avg,
-                                              minimum=b_weighting,
-                                              mean_total=mean_total,
-                                              mode=rating_mode)
+        df["nrating"] = df["ratings"].apply(calculate_avg,
+                                            minimum=b_weighting,
+                                            mean_total=mean_total,
+                                            mode=rating_mode)
     elif rating_mode == "std":
-        df["nw_rating"] = df["ratings"].apply(calculate_avg,
-                                              mode=rating_mode)
+        df["nrating"] = df["ratings"].apply(calculate_avg,
+                                            mode=rating_mode)
     else:
         raise ValueError("No valid rating mode")
 
     # Tiebreaker for sorting: Number of logs
-    df = df[["title", "nw_rating", "nw_logs"]].sort_values("nw_logs",
-                                                           ascending=False)
+    df = df[["title", "nrating", "nlogs"]].sort_values("nlogs",
+                                                       ascending=False)
     # Sort by rating of network
-    df = df.sort_values("nw_rating", ascending=False)
+    df = df.sort_values("nrating", ascending=False)
 
     # Filter by rating
-    df = df[df["nw_rating"] > min_rating]
+    df = df[df["nrating"] > min_rating]
 
     # Clean up: Remove duplicates
     df = df.drop_duplicates(subset=["title"])
@@ -139,34 +140,36 @@ if __name__ == "__main__":
     today = datetime.date.today()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-r", "--minr", help="min_rating", default=3.75,
-                        type=float, dest='minr')
-    parser.add_argument("-w", "--watched", help="y/n", default=None,
-                        type=str, dest='watched')
+    parser.add_argument("-r", "--minr", help="minimum rating",
+                        default=3.75, type=float, dest='minr')
+    parser.add_argument("-w", "--watched", help="exclude films you watched (n)"
+                        " | only consider films you watched (y)",
+                        default=None, type=str, dest='watched')
     parser.add_argument("-mode", "--rating_mode",
-                        help="average or bayesian",
+                        help="average or bayesian average rating mode",
                         default="bayesian", type=str, dest='mode')
-    parser.add_argument("-b", "--b_weighting", help="bayesian weighting",
+    parser.add_argument("-b", "--b_weighting",
+                        help="bayesian average weighting",
                         default=None, type=float, dest='bw')
     parser.add_argument("-o", "--out", help="output format (csv/net),\
-                        None prints to terminal (by default)", default=None,
-                        type=str, dest='out')
+                        None prints to terminal (by default)",
+                        default=None, type=str, dest='out')
     parser.add_argument("-d", "--date",
                         help="date (up to when ratings should be considered)",
                         default=today, type=str, dest='dt')
 
     # Metadata flags
-    parser.add_argument("-m", "--meta", help="metadata", default=False,
-                        action='store_true', dest='meta')
+    parser.add_argument("-m", "--meta", help="include metadata",
+                        default=False, action='store_true', dest='meta')
     parser.add_argument('-lbr', "--min_lb_rating",
-                        help="minimum rating on LB", default=0,
-                        type=float, dest='lbr')
-    parser.add_argument('-minlbl', "--min_lb_logs",
-                        help="minimum number of logs on LB", default=0,
-                        type=int, dest='minlbl')
-    parser.add_argument('-maxlbl', "--max_lb_logs",
-                        help="maximum number of logs on LB", default=10000000,
-                        type=int, dest='maxlbl')
+                        help="minimum rating on LB",
+                        default=0, type=float, dest='lbr')
+    parser.add_argument('-min_llogs', "--min_llogs",
+                        help="minimum number of logs on LB",
+                        default=0, type=int, dest='min_llogs')
+    parser.add_argument('-max_llogs', "--max_llogs",
+                        help="maximum number of logs on LB",
+                        default=10000000, type=int, dest='max_llogs')
     parser.add_argument("-miny", "--min_year", help="earliest year",
                         default=1890, type=int, dest='miny')
     parser.add_argument("-maxy", "--max_year", help="latest year",
@@ -175,8 +178,8 @@ if __name__ == "__main__":
                         default=0, type=int, dest='mint')
     parser.add_argument("-maxt", "--max_runtime", help="maximum runtime",
                         default=10000, type=int, dest='maxt')
-    parser.add_argument("-g", "--genre", help="filter by genre", default=None,
-                        type=str, dest='gen')
+    parser.add_argument("-g", "--genre", help="filter by genre",
+                        default=None, type=str, dest='gen')
     parser.add_argument("-ac", "--actor", help="filter by actor",
                         default=None, type=str, dest='ac')
     parser.add_argument("-di", "--director", help="filter by director",
@@ -200,18 +203,31 @@ if __name__ == "__main__":
                         default=None, type=str, dest='lang')
 
     # Sorting flags
-    # TODO
+    parser.add_argument("-sort", help="sorting the resulting list\n"
+                        "|| Options ||\nllogs : number of Letterboxd logs "
+                        "(descending order)\nnlogs : your friends' (network) "
+                        "logs",
+                        nargs='*', dest='sorts')
+    # Column selection flags
+    parser.add_argument("-cols", help="selected columns to display in list\n"
+                        "Default: [title, year]\n"
+                        "Look up README.md for all options",
+                        nargs='+', dest='cols')
 
     args = parser.parse_args()
 
-    df = collect_from_users(args.dt)
-    df = summarize_ratings(df, min_rating=args.minr, watched=args.watched,
+    df = collect_from_users(args.dt)  # Get ratings
+    # Calculate averages
+    df = summarize_ratings(df,
+                           min_rating=args.minr, watched=args.watched,
                            rating_mode=args.mode, weighting=args.bw)
 
     if args.meta:
-        df = apply_meta_filters(df, min_lb_rating=args.lbr,
-                                min_lb_logs=args.minlbl,
-                                max_lb_logs=args.maxlbl,
+        # Metadata
+        df = apply_meta_filters(df,
+                                min_lrating=args.lbr,
+                                min_llogs=args.min_llogs,
+                                max_llogs=args.max_llogs,
                                 min_year=args.miny, max_year=args.maxy,
                                 min_runtime=args.mint, max_runtime=args.maxt,
                                 genre=args.gen, actor=args.ac,
@@ -220,10 +236,18 @@ if __name__ == "__main__":
                                 cinematography=args.ci, composer=args.com,
                                 studio=args.stu, country=args.cou,
                                 language=args.lang)
-        # Select columns
-        df = df[["title", "year", "nw_rating", "nw_logs", "lb_rating",
-                 "lb_logs"]]
-    else:
-        df = df[["title", "nw_rating", "nw_logs"]]
+
+    # Sorting
+    if args.sorts:
+        df = apply_sorting(df, flags=args.sorts)
+
+    # Select columns
+    if args.meta and args.cols:
+        selected_cols = ["title", "year"]
+        selected_cols += list(args.cols)
+        df = df[selected_cols]
+    elif args.meta:
+        # Default for enabled metadata
+        df = df[["title", "year", "nrating", "nlogs"]]
 
     write_list_to_csv_or_txt(df, args.dt, output_format=args.out)

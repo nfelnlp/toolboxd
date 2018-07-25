@@ -8,8 +8,8 @@ def str_filter(df, sf, sfv):
     return df.loc[df[sf].apply(lambda x: sfv in x)]
 
 
-def apply_meta_filters(df, min_lb_rating=None, min_lb_logs=None,
-                       max_lb_logs=None, min_year=None, max_year=None,
+def apply_meta_filters(df, min_lrating=None, min_llogs=None,
+                       max_llogs=None, min_year=None, max_year=None,
                        min_runtime=None, max_runtime=None, genre=None,
                        actor=None, director=None, producer=None, writer=None,
                        editor=None, cinematography=None, composer=None,
@@ -21,13 +21,13 @@ def apply_meta_filters(df, min_lb_rating=None, min_lb_logs=None,
     df["year"] = df["year"].apply(int)
 
     # Filter by LB rating
-    if min_lb_rating:
-        df = df.loc[df["lb_rating"] >= min_lb_rating]
+    if min_lrating:
+        df = df.loc[df["lrating"] >= min_lrating]
 
     # Filter by LB logs
-    if min_lb_logs or max_lb_logs:
-        df = df.loc[(df["lb_logs"] <= max_lb_logs) & (
-                     df["lb_logs"] >= min_lb_logs)]
+    if min_llogs or max_llogs:
+        df = df.loc[(df["llogs"] <= max_llogs) & (
+                     df["llogs"] >= min_llogs)]
 
     # Filter by year
     if min_year or max_year:
@@ -54,11 +54,4 @@ def apply_meta_filters(df, min_lb_rating=None, min_lb_logs=None,
         if val is not None:
             df = str_filter(df, sf, val)
 
-    return df
-
-
-def apply_sorting(df, sort_lbl=False):
-    if sort_lbl:
-        # Sort by number of LB logs
-        df = df.sort_values("lb_logs")
     return df

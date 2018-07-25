@@ -2,6 +2,7 @@ import sys
 import csv
 import datetime
 import os
+import time
 import argparse
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -62,7 +63,7 @@ def add_user_to_network(user, list_type, date, user_path=None):
 
 
 def update_user(user, list_type, date):
-    print(">>> {}".format(user))
+    print(">> {}\n".format(user))
     files = sorted(os.listdir('user/{}/'.format(user)), reverse=True)
     recent_csv = 'user/{}/{}'.format(user, files[0])
 
@@ -109,11 +110,7 @@ def update_user(user, list_type, date):
     # Delete file if empty
     if os.stat(new_csv).st_size == 0:
         os.remove(new_csv)
-
-    if new_num > 0:
-        print("Found {} new logs..\n".format(new_num))
-    else:
-        print("No new logs.\n")
+    print("\n")
 
 
 def check_ratings(user_folder, initial_retrieval_date):
@@ -128,7 +125,7 @@ def check_ratings(user_folder, initial_retrieval_date):
         subset='title', keep='last').reset_index(drop=True)
 
     page_num = 1
-    rating_time = '2018-04-30'
+    rating_time = '2018-04-30'  # dummy
     while True:
         lb_url = 'http://letterboxd.com'
         with request.urlopen('{}/{}/films/ratings/page/{}'.format(
@@ -156,8 +153,8 @@ def check_ratings(user_folder, initial_retrieval_date):
                                 int(db_r) != int(this_user_rating)
                                 and int(this_user_rating) != 0
                                 and rating_time > initial_retrieval_date):
-                            print("\tUpdated {} (Rating: {}), "
-                                  "previous rating was {} in csv {}.".format(
+                            print("\tUpdated {} (Rating: {}, "
+                                  "previously: {}) in csv {}.".format(
                                     mov_str, this_user_rating, db_r,
                                     rating_time))
                             with open('user/{}/{}_{}.csv'.format(
@@ -169,9 +166,8 @@ def check_ratings(user_folder, initial_retrieval_date):
                                 writer.writerow([mov_str, this_user_rating])
 
                     except IndexError:
-                        print(mov_str)
-                        print("\tDid not find this movie in the database. "
-                              "Added with {} rating.".format(this_user_rating))
+                        print("\tAdded {} (Rating: {}).".format(
+                            mov_str, this_user_rating))
                         with open('user/{}/{}_{}.csv'.format(
                                 user_folder, user_folder, rating_time),
                                 'a+') as wcsv:
@@ -212,6 +208,8 @@ if __name__ == "__main__":
                         default=None, type=str, dest='user')
     parser.add_argument("-c", "--check", help="double check existing ratings",
                         default=False, action="store_true", dest='check')
+    parser.add_argument("-w", "--wait", help="sleep timer in seconds after "
+                        "each request", default=0, type=int, dest='wait')
     args = parser.parse_args()
 
     date = datetime.date.today()
@@ -231,6 +229,8 @@ if __name__ == "__main__":
 
     for friend in reversed(network):
         print("")
+        if args.wait:
+            time.sleep(int(args.wait))
         if not os.path.exists('user/{}'.format(friend)):
             os.makedirs('user/{}'.format(friend))
             print("Creating new folder and retrieving all ratings for\
@@ -245,4 +245,4 @@ if __name__ == "__main__":
                     'user/{}'.format(
                         friend))))[0].strip('.csv').split('_')[-1]
                 check_ratings(friend, ini_rd)
-        print("___________")
+        print("_________________________")
