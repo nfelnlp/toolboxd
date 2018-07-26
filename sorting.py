@@ -9,7 +9,7 @@ def apply_sorting(df, flags):
         if fl.endswith('_asc'):
             # Ascending
             order = True
-            fl = fl.strip('_asc')
+            fl = fl[:-4]
         df = df.sort_values(fl, ascending=order)
 
     return df

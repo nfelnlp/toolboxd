@@ -8,7 +8,7 @@ from functools import reduce
 from bs4 import BeautifulSoup
 from urllib import request
 
-from meta_filters import apply_meta_filters
+from metadata import apply_meta_filters
 from sorting import apply_sorting
 
 
@@ -77,11 +77,6 @@ def write_list_to_csv_or_txt(df, date, output_format=None):
         print(df.to_string())
 
 
-def add_rating_difference(df):
-    df["diff"] = df.apply(lambda x: x["nrating"] - x["lrating"], axis=1)
-    return df.sort_values("diff", ascending=False)
-
-
 def summarize_ratings(df, min_rating=3.75, watched=None,
                       rating_mode="bayesian", weighting=None):
     default_user = open('your_username.txt', 'r').read()
@@ -121,17 +116,11 @@ def summarize_ratings(df, min_rating=3.75, watched=None,
     else:
         raise ValueError("No valid rating mode")
 
-    # Tiebreaker for sorting: Number of logs
-    df = df[["title", "nrating", "nlogs"]].sort_values("nlogs",
-                                                       ascending=False)
-    # Sort by rating of network
-    df = df.sort_values("nrating", ascending=False)
-
     # Filter by rating
     df = df[df["nrating"] > min_rating]
 
-    # Clean up: Remove duplicates
-    df = df.drop_duplicates(subset=["title"])
+    # Clean up: Remove duplicates, select columns
+    df = df[["title", "nrating", "nlogs"]].drop_duplicates(subset=["title"])
 
     return df
 
@@ -204,10 +193,9 @@ if __name__ == "__main__":
 
     # Sorting flags
     parser.add_argument("-sort", help="sorting the resulting list\n"
-                        "|| Options ||\nllogs : number of Letterboxd logs "
-                        "(descending order)\nnlogs : your friends' (network) "
-                        "logs",
-                        nargs='*', dest='sorts')
+                        "Default: nrating (network rating), nlogs "
+                        "(how many of your friends logged it)",
+                        nargs='*', default=['nrating', 'nlogs'], dest='sorts')
     # Column selection flags
     parser.add_argument("-cols", help="selected columns to display in list\n"
                         "Default: [title, year]\n"
@@ -238,8 +226,7 @@ if __name__ == "__main__":
                                 language=args.lang)
 
     # Sorting
-    if args.sorts:
-        df = apply_sorting(df, flags=args.sorts)
+    df = apply_sorting(df, flags=args.sorts)
 
     # Select columns
     if args.meta and args.cols:
