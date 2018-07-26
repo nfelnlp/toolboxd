@@ -41,7 +41,7 @@ python3 ranking.py -o csv -r 0
 ```
 This will put out a csv file including all movies ever logged by users you follow.
 
-The three columns are `[movie title],[network rating],[network number of logs]`.
+The three columns are `[title],[network_rating],[network_number_of_logs]`.
 
 `ranking.py` also has other options available:
 - `-r [rating]` : The minimum rating down to which value you want the resulting list to go. By default, this is `3.75`.
@@ -61,11 +61,16 @@ python3 ladle.py
 ```
 **Warning**: This usually takes around 10MB of disk space per 100 movies.
 
+By default, this takes the csv file in the `lists` directory with the latest date in its name. You have the following options with `ladle.py`:
+- `-r` : Specify minimum rating (default: 3.75 / 5)
+- `-f` : Select another csv file (don't forget the path!)
+- `-w` : Sleep timer in seconds after each request
+
 Now you can use the following flags with `ranking.py`:
-- `-m` (required for flags below) : Include metadata. At the moment, this is by default `[year],[letterboxd average rating],[letterboxd number of logs],[list of genres]`
+- `-m` (required for flags below) : Include metadata. At the moment, this is by default `[year],[letterboxd_average_rating],[letterboxd_number_of_logs],[list_of_genres]`
 - `-lbr [rating between 0.00 and 5.00]` : Minimum Letterboxd rating.
-- `-minlbl [logs]` : Minimum number of logs on Letterboxd.
-- `-maxlbl [logs]` : Maximum number of logs on Letterboxd.
+- `-min_llogs [logs]` : Minimum number of logs on Letterboxd.
+- `-max_llogs [logs]` : Maximum number of logs on Letterboxd.
 - `-miny [year]` : Movies released in or after this year.
 - `-maxy [year]` : Movies released in or before this year.
 - `-mint [runtime in min]` : Minimum runtime of a movie.
@@ -85,9 +90,33 @@ For the following flags, please follow the letterboxd URL, so it's best to inclu
 - `-lang [language]` : Filter by language.
 
 
-## Sort the list differently
+## Sort the list by a different column
 
-Coming soon.
+Run
+```
+python3 ranking.py -sort <column_name>
+```
+with any column appearing in the metadata, e.g.:
+- `title` : Reverse alphabetical order according to movie title (`title_asc` for alphabetical)
+- `year` : Release year of the movie, newest first (`year_asc` for earliest first)
+- `nrating` : Highest network rating (average of your friends' ratings) first (this is the default way of sorting if you don't specify `-sort`)
+- `nlogs` : Number of logs from your friends, highest first
+- `lrating` : Highest Letterboxd rating first
+- `llogs` : Number of logs on Letterboxd, highest first. Note: This number won't change unless you manually delete all folders in `moviedata` (not recommended, though!).
+- `diff` : Difference between `nrating` and `lrating`.
+
+
+## Select columns to show in the list
+
+You can also change the columns (next to the mandatory "title" and "year") displayed at the end by running
+```
+python3 ranking.py -cols <column_name>
+```
+e.g. `genre`, `runtime`, `llogs` (number of Letterboxd logs), `lrating` (Letterboxd rating), `director`, `cinematography`, `language`.
+
+It is possible to pass multiple columns, separated by spaces, where the last column sort gets done first s.t. only for ties at the first column sort the next few decide on the order.
+
+This can lead to interesting results when combined with the `-sort` flag from above.
 
 
 ## Generate all-time favourites list importable to Letterboxd
@@ -111,8 +140,16 @@ The `-c` flag is for updating the ratings in case they changed after a rewatch o
 
 When you execute `ratings.py` for a second time a few days after, you most likely have new logs from your friends. In order to see what movies changed the most, run
 ```
-python3 movements.py
+python3 hype.py -old <path/to/old/csv> -new <path/to/new/csv> -flags popular
 ```
+By default (without `-old` and `-new`), it will look for the csvs with the two most recent dates in the `lists` directory.
+
+Using the `-flags` option, you can (currently) choose from three different hype lists which are:
+- `rising` (default) : Movies with a rating of above 3.00 that have gained at least 0.05
+- `popular` : Movies that have gained the most new logs
+- `top` : See how the current top 20 movies were placed last time
+
+**Note**: `hype.py` currently only works with downloaded metadata (`moviedata` directory).
 
 
 ## Download your watchlist or other lists on Letterboxd
