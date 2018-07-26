@@ -79,6 +79,8 @@ def get_movie_info(df):
     except TypeError:
         df["lrating"] = None
         df["diff"] = None
+    except KeyError:
+        df["diff"] = None
 
     # NUMBER OF LETTERBOXD USERS WHO WATCHED IT
     logs_str = soup.find('li', class_='filmstat-watches').find(

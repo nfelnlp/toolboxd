@@ -1,5 +1,6 @@
 import os
 import time
+import argparse
 import pandas as pd
 from urllib import request
 from bs4 import BeautifulSoup
@@ -35,6 +36,8 @@ if __name__ == "__main__":
                         type=str, dest='f')
     parser.add_argument("-w", "--wait", help="sleep timer in seconds after "
                         "each request", default=0, type=int, dest='wait')
+    parser.add_argument("-cols", help="columns in csv", nargs='+',
+                        default=["title", "rating", "num_logs"], dest='cols')
     args = parser.parse_args()
 
     if args.f:
@@ -48,6 +51,6 @@ if __name__ == "__main__":
 
     print("Using {} ...".format(selected_file))
 
-    df = pd.read_csv(selected_file, sep=r'\t',
-                     names=["title", "rating", "num_logs"], engine='python')
+    df = pd.read_csv(selected_file, sep=r'\t', names=args.cols,
+                     engine='python')
     df.apply(save_html, min_rating=args.minr, wait_secs=args.wait, axis=1)

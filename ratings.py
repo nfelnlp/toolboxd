@@ -9,20 +9,27 @@ from bs4 import BeautifulSoup
 from urllib import request
 
 
-def add_user_to_network(user, list_type, date, user_path=None):
+def add_user_to_network(user, list_type, date=None, save_dir=None,
+                        output_name=None, to_reverse=True):
+    # Download html
     with request.urlopen('http://letterboxd.com/{}/{}/'.format(
             user, list_type)) as response:
         html = response.read()
         soup = BeautifulSoup(html, 'html.parser')
-        # How many pages has the watchlist
+
+        # How many pages has the list
         try:
             last_page_num = soup.find_all(class_='paginate-page')[-1].text
         except IndexError:
             last_page_num = 1
 
-    if not user_path:
-        user_path = 'user/{}'.format(user)
-    with open('{}/{}_{}.csv'.format(user_path, user, date), 'a+') as wcsv:
+    if not save_dir:
+        save_dir = 'user/{}'.format(user)
+    if date:
+        output_name = "{}_{}.csv".format(user, date)
+    else:
+        output_name = "{}.csv".format(list_type[4:])
+    with open('{}/{}'.format(save_dir, output_name), 'a+') as wcsv:
         writer = csv.writer(wcsv, delimiter='\t', quotechar='|',
                             quoting=csv.QUOTE_MINIMAL)
         for page in range(1, int(last_page_num)+1):
@@ -45,21 +52,22 @@ def add_user_to_network(user, list_type, date, user_path=None):
 
             print("\tPage {} : {} movies".format(page, len(movie_li)))
 
-    # Reverse csv
-    print("Reversing order of movies in csv...\n")
-    files = os.listdir(user_path)
+    if to_reverse:
+        # Reverse csv
+        print("Reversing order of movies in csv...\n")
+        files = os.listdir(save_dir)
 
-    filename = "{}/{}".format(user_path, files[0])
-    os.rename(filename, "{}.temp".format(filename))
+        filename = "{}/{}".format(save_dir, files[0])
+        os.rename(filename, "{}.temp".format(filename))
 
-    old_csv = "{}/{}".format(user_path, (os.listdir(user_path))[0])
+        old_csv = "{}/{}".format(save_dir, (os.listdir(save_dir))[0])
 
-    with open(filename, 'w') as wf:
-        with open(old_csv, 'r') as cf:
-            lines = [x for x in cf]
-            for line in lines[::-1]:
-                wf.write(line)
-    os.remove(old_csv)
+        with open(filename, 'w') as wf:
+            with open(old_csv, 'r') as cf:
+                lines = [x for x in cf]
+                for line in lines[::-1]:
+                    wf.write(line)
+        os.remove(old_csv)
 
 
 def update_user(user, list_type, date):

@@ -154,9 +154,10 @@ Using the `-flags` option, you can (currently) choose from three different hype 
 
 ## Download your watchlist or other lists on Letterboxd
 
-Coming soon.
+Run `python3 show_list.py -clone <URL>` to clone a list from Letterboxd.
 
+This has only the really basic functionality of saving it to a `.csv` file and printing it in the form of `[title], [year], [letterboxd_rating], [letterboxd_logs]` using the additional `-m` flag.
 
-## See how close your taste in movies is to your friends
+You can also run `python3 show_list.py -f <path/to/csv/file> -m` to display an already downloaded list.
 
-Coming soon(TM).
+This will soon be integrated into `ranking.py` among other files in order to filter by lists.
