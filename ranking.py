@@ -188,28 +188,37 @@ if __name__ == "__main__":
     parser.add_argument("-maxt", "--max_runtime", help="maximum runtime",
                         default=10000, type=int, dest='maxt')
 
-    parser.add_argument("-g", "--genre", help="filter by genre",
+    parser.add_argument("-genre", help="filter by genre",
                         default=None, type=str, dest='gen')
-    parser.add_argument("-ac", "--actor", help="filter by actor",
+    parser.add_argument("-actor", help="filter by actor",
                         default=None, type=str, dest='ac')
-    parser.add_argument("-di", "--director", help="filter by director",
+    parser.add_argument("-director", help="filter by director",
                         default=None, type=str, dest='di')
-    parser.add_argument("-pro", "--producer", help="filter by producer",
+    parser.add_argument("-producer", help="filter by producer",
                         default=None, type=str, dest='pro')
-    parser.add_argument("-wr", "--writer", help="filter by writer",
+    parser.add_argument("-writer", help="filter by writer",
                         default=None, type=str, dest='wr')
-    parser.add_argument("-ed", "--editor", help="filter by editor",
+    parser.add_argument("-editor", help="filter by editor",
                         default=None, type=str, dest='ed')
-    parser.add_argument("-ci", "--cinematography",
+    parser.add_argument("-cinematography",
                         help="filter by cinematography",
                         default=None, type=str, dest='ci')
-    parser.add_argument("-com", "--composer", help="filter by composer",
+    parser.add_argument("-visual_effects", help="filter by visual effects",
+                        default=None, type=str, dest='vfx')
+    parser.add_argument("-composer", help="filter by composer",
                         default=None, type=str, dest='com')
-    parser.add_argument("-stu", "--studio", help="filter by studio",
+    parser.add_argument("-sound", help="filter by sound",
+                        default=None, type=str, dest='snd')
+    parser.add_argument("-production_design",
+                        help="filter by production design",
+                        default=None, type=str, dest='pdes')
+    parser.add_argument("-costumes", help="filter by costumes",
+                        default=None, type=str, dest='cstm')
+    parser.add_argument("-studio", help="filter by studio",
                         default=None, type=str, dest='stu')
-    parser.add_argument("-cou", "--country", help="filter by country",
+    parser.add_argument("-country", help="filter by country",
                         default=None, type=str, dest='cou')
-    parser.add_argument("-lang", "--language", help="filter by language",
+    parser.add_argument("-language", help="filter by language",
                         default=None, type=str, dest='lang')
 
     # Sorting flags
@@ -246,7 +255,10 @@ if __name__ == "__main__":
                                 genre=args.gen, actor=args.ac,
                                 director=args.di, producer=args.pro,
                                 writer=args.wr, editor=args.ed,
-                                cinematography=args.ci, composer=args.com,
+                                cinematography=args.ci,
+                                visual_effects=args.vfx, composer=args.com,
+                                sound=args.snd, production_design=args.pdes,
+                                costumes=args.cstm,
                                 studio=args.stu, country=args.cou,
                                 language=args.lang)
 

@@ -62,33 +62,38 @@ python3 ladle.py
 **Warning**: This usually takes around 10MB of disk space per 100 movies.
 
 By default, this takes the csv file in the `lists` directory with the latest date in its name. You have the following options with `ladle.py`:
-- `-r` : Specify minimum rating (default: 3.75)
+- `-r [rating]` : Specify minimum rating (default: 3.75)
 - `-f` : Select another csv file
-- `-w` : Sleep timer in seconds after each request
-- `-cols` : Specify which columns the csv file has
+- `-refresh` : Download HTMLs again (limit: once per day). The older file gets moved into a sub directory which has the "last-modified" date as its name.
+- `-w [seconds]` : Sleep timer after each request
+- `-cols [col1] [col2]` : Specify which columns the csv file has
 
 Now you can use the following flags with `ranking.py`:
 - `-m` (required for flags below) : Include metadata. At the moment, this is by default `[year],[letterboxd_average_rating],[letterboxd_number_of_logs],[list_of_genres]`
-- `-lbr [rating between 0.00 and 5.00]` : Minimum Letterboxd rating.
+- `-lbr [rating]` : Minimum Letterboxd rating.
 - `-min_llogs [logs]` : Minimum number of logs on Letterboxd.
 - `-max_llogs [logs]` : Maximum number of logs on Letterboxd.
 - `-miny [year]` : Movies released in or after this year.
 - `-maxy [year]` : Movies released in or before this year.
 - `-mint [runtime in min]` : Minimum runtime of a movie.
 - `-maxt [runtime in min]` : Maximum runtime of a movie.
-- `-g [genre]` : Filter by genre, e.g. `"science fiction"` or `action`.
+- `-genre [genre]` : Filter by genre, e.g. `"science fiction"` or `action`.
 
-For the following flags, please follow the letterboxd URL, so it's best to include hyphens instead of spaces:
-- `-ac [actor]` : Filter by actor, e.g. `nicolas-cage`
-- `-di [director]` : Filter by director, e.g. `stanley-kubrick`
-- `-pro [producer]` : Filter by producer.
-- `-wr [writer]` : Filter by writer.
-- `-ed [editor]` : Filter by editor.
-- `-ci [cinematographer]` : Filter by cinematographer.
-- `-com [composer]` : Filter by composer.
-- `-stu [studio]` : Filter by studio.
-- `-cou [country]` : Filter by country.
-- `-lang [language]` : Filter by language.
+For the following flags, please follow the letterboxd URL (search function coming soon!), so it's best to include hyphens instead of spaces:
+- `-actor` : Filter by actor, e.g. `nicolas-cage`.
+- `-director` : Filter by director, e.g. `stanley-kubrick`.
+- `-producer` : Filter by producer, e.g. `paul-thomas-anderson`.
+- `-writer` : Filter by writer, e.g. `aaron-sorkin`.
+- `-editor` : Filter by editor, e.g. `tricia-cooke`.
+- `-cinematography` : Filter by cinematographer, e.g. `robert-elswit`.
+- `-visual_effects` : Filter by visual effects crew, e.g. `janet-yale`.
+- `-composer` : Filter by composer, e.g. `jonny-greenwood`.
+- `-sound` : Filter by sound crew, e.g. `ben-burtt`.
+- `-production_design` : Filter by production designer, e.g. `leslie-dilley`.
+- `-costumes` : Filter by costume designer, e.g. `mary-zophres`.
+- `-studio` : Filter by studio, e.g. `a24`.
+- `-country` : Filter by country, e.g. `italy`.
+- `-language` : Filter by language, e.g. `thai`.
 
 
 ## Sort the list by a different column

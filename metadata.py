@@ -8,11 +8,12 @@ def str_filter(df, sf, sfv):
     return df.loc[df[sf].apply(lambda x: sfv in x)]
 
 
-def apply_meta_filters(df, min_lrating=None, min_llogs=None,
-                       max_llogs=None, min_year=None, max_year=None,
-                       min_runtime=None, max_runtime=None, genre=None,
-                       actor=None, director=None, producer=None, writer=None,
-                       editor=None, cinematography=None, composer=None,
+def apply_meta_filters(df, min_lrating=None, min_llogs=None, max_llogs=None,
+                       min_year=None, max_year=None, min_runtime=None,
+                       max_runtime=None, genre=None, actor=None, director=None,
+                       producer=None, writer=None, editor=None,
+                       cinematography=None, visual_effects=None, composer=None,
+                       sound=None, production_design=None, costumes=None,
                        studio=None, country=None, language=None):
     # Retrieve all the metadata
     df = df.apply(get_movie_info, axis=1)
@@ -46,7 +47,11 @@ def apply_meta_filters(df, min_lrating=None, min_llogs=None,
                "writer": writer,
                "editor": editor,
                "cinematography": cinematography,
+               "visual-effects": visual_effects,
                "composer": composer,
+               "sound": sound,
+               "production-design": production_design,
+               "costumes": costumes,
                "studio": studio,
                "country": country,
                "language": language}
