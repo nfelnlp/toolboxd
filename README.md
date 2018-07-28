@@ -62,9 +62,10 @@ python3 ladle.py
 **Warning**: This usually takes around 10MB of disk space per 100 movies.
 
 By default, this takes the csv file in the `lists` directory with the latest date in its name. You have the following options with `ladle.py`:
-- `-r` : Specify minimum rating (default: 3.75 / 5)
-- `-f` : Select another csv file (don't forget the path!)
+- `-r` : Specify minimum rating (default: 3.75)
+- `-f` : Select another csv file
 - `-w` : Sleep timer in seconds after each request
+- `-cols` : Specify which columns the csv file has
 
 Now you can use the following flags with `ranking.py`:
 - `-m` (required for flags below) : Include metadata. At the moment, this is by default `[year],[letterboxd_average_rating],[letterboxd_number_of_logs],[list_of_genres]`
@@ -105,6 +106,8 @@ with any column appearing in the metadata, e.g.:
 - `llogs` : Number of logs on Letterboxd, highest first. Note: This number won't change unless you manually delete all folders in `moviedata` (not recommended, though!).
 - `diff` : Difference between `nrating` and `lrating`.
 
+It is possible to pass multiple columns, separated by spaces, where the last column sort gets done first s.t. only for ties at the first column sort the next few decide on the order.
+
 
 ## Select columns to show in the list
 
@@ -113,10 +116,6 @@ You can also change the columns (next to the mandatory "title" and "year") displ
 python3 ranking.py -cols <column_name>
 ```
 e.g. `genre`, `runtime`, `llogs` (number of Letterboxd logs), `lrating` (Letterboxd rating), `director`, `cinematography`, `language`.
-
-It is possible to pass multiple columns, separated by spaces, where the last column sort gets done first s.t. only for ties at the first column sort the next few decide on the order.
-
-This can lead to interesting results when combined with the `-sort` flag from above.
 
 
 ## Generate all-time favourites list importable to Letterboxd
@@ -154,10 +153,8 @@ Using the `-flags` option, you can (currently) choose from three different hype 
 
 ## Download your watchlist or other lists on Letterboxd
 
-Run `python3 show_list.py -clone <URL>` to clone a list from Letterboxd.
+Run `python3 clone_list.py <URL>` to clone a list from Letterboxd.
 
-This has only the really basic functionality of saving it to a `.csv` file and printing it in the form of `[title], [year], [letterboxd_rating], [letterboxd_logs]` using the additional `-m` flag.
+Run `python3 ladle.py -f <path/to/csv/file> -r 0` to download the necessary metadata that is not already in the `moviedata` directory.
 
-You can also run `python3 show_list.py -f <path/to/csv/file> -m` to display an already downloaded list.
-
-This will soon be integrated into `ranking.py` among other files in order to filter by lists.
+Or you can run `python3 ranking.py -list <path/to/csv/file>` to filter all ratings by this list.

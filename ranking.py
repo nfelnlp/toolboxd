@@ -8,29 +8,12 @@ from functools import reduce
 from bs4 import BeautifulSoup
 from urllib import request
 
+from clone_list import clone
 from metadata import apply_meta_filters
 from sorting import apply_sorting
 
 
-def calculate_avg(ratings, minimum=0, mean_total=0, mode="std"):
-    # Remove 0 ratings
-    ratings = [x for x in ratings if x != 0]
-
-    if len(ratings) == 0:
-        return None
-    else:
-        votes = len(ratings)
-        rating = sum(ratings)/votes
-        if mode == "std":
-            return rating/2
-
-        elif mode == "bayesian":
-            return round(((votes / (votes + minimum)) * rating
-                         + (minimum / (votes + minimum))
-                         * mean_total)/2, 2)
-
-
-def collect_from_users(changes_from):
+def collect_logs_from_users(changes_from):
     try:
         changes_from = datetime.datetime.strptime(changes_from, '%Y-%m-%d')
     except TypeError:
@@ -61,24 +44,7 @@ def collect_from_users(changes_from):
                                                how='outer'), network_dfs)
 
 
-def write_list_to_csv_or_txt(df, date, output_format=None):
-    if output_format == 'net':
-        filename = 'lists/network_{}.csv'.format(date)
-        df[["title", "year", "nrating"]].to_csv(
-            filename, sep=',', index=False)
-        print("Created Letterboxd-importable file {}.".format(filename))
-    elif output_format == 'csv':
-        filename = 'lists/all_{}.csv'.format(date)
-        df[["title", "nrating", "nlogs"]].to_csv(
-            filename, sep='\t', index=False,
-            header=False)
-        print("Created csv file {}.".format(filename))
-    else:
-        print(df.to_string())
-
-
-def summarize_ratings(df, min_rating=3.75, watched=None,
-                      rating_mode="bayesian", weighting=None):
+def apply_filters(df, watched=None, keep_own=False, list_filter=None):
     default_user = open('your_username.txt', 'r').read()
 
     # Watched filter
@@ -87,8 +53,42 @@ def summarize_ratings(df, min_rating=3.75, watched=None,
     elif watched == "n":
         df = df.loc[df[default_user].isnull()]
 
-    df = df.drop([default_user], axis=1)  # Leave out own rating
+    # Leave out own rating
+    if not keep_own:
+        df = df.drop([default_user], axis=1)
 
+    if list_filter:
+        if list_filter.startswith('http'):
+            print("Cloning list from Letterboxd...")
+            list_csv = clone(list_filter, return_filename=True)
+        else:
+            list_csv = list_filter
+        list_df = pd.read_csv(list_csv, sep=r'\t', usecols=["title"],
+                              names=["title"], engine='python')
+        df = pd.merge(df, list_df, on='title', how='right')
+    return df
+
+
+def calculate_avg(ratings, minimum=0, mean_total=0, mode="std"):
+    # Remove 0 ratings
+    ratings = [x for x in ratings if x != 0]
+
+    if len(ratings) == 0:
+        return None
+    else:
+        votes = len(ratings)
+        rating = sum(ratings)/votes
+        if mode == "std":
+            return rating/2
+
+        elif mode == "bayesian":
+            return round(((votes / (votes + minimum)) * rating
+                         + (minimum / (votes + minimum))
+                         * mean_total)/2, 2)
+
+
+def summarize_ratings(df, min_rating=3.75,
+                      rating_mode="bayesian", weighting=None):
     # Generate ratings lists and number of logs in network
     df["ratings"] = df.drop(["title"], axis=1).values.tolist()
     df["ratings"] = df["ratings"].apply(
@@ -125,6 +125,22 @@ def summarize_ratings(df, min_rating=3.75, watched=None,
     return df
 
 
+def write_list_to_csv_or_txt(df, date, output_format=None):
+    if output_format == 'net':
+        filename = 'lists/network_{}.csv'.format(date)
+        df[["title", "year", "nrating"]].to_csv(
+            filename, sep=',', index=False)
+        print("Created Letterboxd-importable file {}.".format(filename))
+    elif output_format == 'csv':
+        filename = 'lists/all_{}.csv'.format(date)
+        df[["title", "nrating", "nlogs"]].to_csv(
+            filename, sep='\t', index=False,
+            header=False)
+        print("Created csv file {}.".format(filename))
+    else:
+        print(df.to_string())
+
+
 if __name__ == "__main__":
     today = datetime.date.today()
 
@@ -134,6 +150,10 @@ if __name__ == "__main__":
     parser.add_argument("-w", "--watched", help="exclude films you watched (n)"
                         " | only consider films you watched (y)",
                         default=None, type=str, dest='watched')
+    parser.add_argument("-keep_own", help="keep your own rating for averaging",
+                        default=False, action='store_true', dest='keep_own')
+    parser.add_argument("-list", help="filter by cloned or created list",
+                        default=None, type=str, dest='lf')
     parser.add_argument("-mode", "--rating_mode",
                         help="average or bayesian average rating mode",
                         default="bayesian", type=str, dest='mode')
@@ -167,6 +187,7 @@ if __name__ == "__main__":
                         default=0, type=int, dest='mint')
     parser.add_argument("-maxt", "--max_runtime", help="maximum runtime",
                         default=10000, type=int, dest='maxt')
+
     parser.add_argument("-g", "--genre", help="filter by genre",
                         default=None, type=str, dest='gen')
     parser.add_argument("-ac", "--actor", help="filter by actor",
@@ -204,14 +225,18 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    df = collect_from_users(args.dt)  # Get ratings
-    # Calculate averages
+    # Get ratings
+    df = collect_logs_from_users(args.dt)
+    df = apply_filters(df,
+                       watched=args.watched, keep_own=args.keep_own,
+                       list_filter=args.lf)
+
+    # Calculate network ratings
     df = summarize_ratings(df,
-                           min_rating=args.minr, watched=args.watched,
-                           rating_mode=args.mode, weighting=args.bw)
+                           min_rating=args.minr, rating_mode=args.mode,
+                           weighting=args.bw)
 
     if args.meta:
-        # Metadata
         df = apply_meta_filters(df,
                                 min_lrating=args.lbr,
                                 min_llogs=args.min_llogs,
@@ -225,7 +250,6 @@ if __name__ == "__main__":
                                 studio=args.stu, country=args.cou,
                                 language=args.lang)
 
-    # Sorting
     df = apply_sorting(df, flags=args.sorts)
 
     # Select columns

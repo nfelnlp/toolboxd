@@ -9,57 +9,62 @@ from bs4 import BeautifulSoup
 from urllib import request
 
 
-def add_user_to_network(user, list_type, date=None, save_dir=None,
-                        output_name=None, to_reverse=True):
-    # Download html
-    with request.urlopen('http://letterboxd.com/{}/{}/'.format(
-            user, list_type)) as response:
-        html = response.read()
-        soup = BeautifulSoup(html, 'html.parser')
+def get_all_movies_from_page(user, list_title, save_dir='lists',
+                             output_name=None, with_ratings=True,
+                             to_reverse=True, create_meta_file=False,
+                             return_path=False):
+    if not output_name:
+        output_name = list_title.replace('/', '_')
 
-        # How many pages has the list
-        try:
-            last_page_num = soup.find_all(class_='paginate-page')[-1].text
-        except IndexError:
-            last_page_num = 1
-
-    if not save_dir:
-        save_dir = 'user/{}'.format(user)
-    if date:
-        output_name = "{}_{}.csv".format(user, date)
-    else:
-        output_name = "{}.csv".format(list_type[4:])
-    with open('{}/{}'.format(save_dir, output_name), 'a+') as wcsv:
+    full_path = '{}/{}/{}'.format(save_dir, user, output_name)
+    with open("{}.csv".format(full_path), 'a+') as wcsv:
         writer = csv.writer(wcsv, delimiter='\t', quotechar='|',
                             quoting=csv.QUOTE_MINIMAL)
-        for page in range(1, int(last_page_num)+1):
+        page = 1
+        while True:
             with request.urlopen('http://letterboxd.com/{}/{}/page/{}/'.format(
-                    user, list_type, page)) as response:
+                    user, list_title, page)) as response:
                 html = response.read()
                 soup = BeautifulSoup(html, 'html.parser')
+
+                if create_meta_file:
+                    with open('{}_META.html'.format(
+                            full_path), 'w') as lmf:
+                        lmf.write(soup.prettify())
+                    create_meta_file = False
 
                 # Find all movie posters / links on this page
                 movie_li = [lm for lm in soup.find_all(
                     'li', class_='poster-container')]
 
                 for mov in movie_li:
-                    this_user_rating = mov['data-owner-rating']
+                    write_stuff = []
 
-                    # Retrieve metadata for each movie
-                    mov_str = mov.div['data-target-link'].split('/')[2]
+                    # Retrieve title
+                    write_stuff.append(mov.div['data-target-link'].split(
+                        '/')[2])
 
-                    writer.writerow([mov_str, this_user_rating])
+                    # Retrieve rating
+                    if with_ratings:
+                        write_stuff.append(mov['data-owner-rating'])
+
+                    writer.writerow(write_stuff)
 
             print("\tPage {} : {} movies".format(page, len(movie_li)))
+            try:
+                last_page = soup.find_all(class_='paginate-page')[-1].text
+                if page >= int(last_page):
+                    break
+                page += 1
+            except IndexError:
+                break
 
     if to_reverse:
         # Reverse csv
-        print("Reversing order of movies in csv...\n")
+        print("\tReversing order of movies in csv...\n")
         files = os.listdir(save_dir)
-
         filename = "{}/{}".format(save_dir, files[0])
         os.rename(filename, "{}.temp".format(filename))
-
         old_csv = "{}/{}".format(save_dir, (os.listdir(save_dir))[0])
 
         with open(filename, 'w') as wf:
@@ -68,6 +73,9 @@ def add_user_to_network(user, list_type, date=None, save_dir=None,
                 for line in lines[::-1]:
                     wf.write(line)
         os.remove(old_csv)
+
+    if return_path:
+        return full_path
 
 
 def update_user(user, list_type, date):
@@ -236,14 +244,17 @@ if __name__ == "__main__":
     network = traverse_network(user, date)
 
     for friend in reversed(network):
-        print("")
+        print("_________________________")
         if args.wait:
             time.sleep(int(args.wait))
         if not os.path.exists('user/{}'.format(friend)):
             os.makedirs('user/{}'.format(friend))
             print("Creating new folder and retrieving all ratings for\
                    {}...".format(friend))
-            add_user_to_network(friend, 'films/by/date', date)
+            get_all_movies_from_page(user=friend,
+                                     list_title='films/by/date',
+                                     save_dir='user',
+                                     output_name="{}_{}".format(user, date))
 
         else:
             update_user(friend, 'films/by/date', date)
@@ -253,4 +264,4 @@ if __name__ == "__main__":
                     'user/{}'.format(
                         friend))))[0].strip('.csv').split('_')[-1]
                 check_ratings(friend, ini_rd)
-        print("_________________________")
+        print("")

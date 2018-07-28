@@ -2,6 +2,7 @@ import os
 import time
 import argparse
 import pandas as pd
+
 from urllib import request
 from bs4 import BeautifulSoup
 
@@ -30,7 +31,7 @@ def save_html(df, min_rating=3.75, wait_secs=0):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-r", "--minr", help="minimum rating", default=3.75,
+    parser.add_argument("-r", "--minr", help="minimum rating", default=0.00,
                         type=float, dest='minr')
     parser.add_argument("-f", "--file", help="csv file", default=None,
                         type=str, dest='f')
