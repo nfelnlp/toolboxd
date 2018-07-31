@@ -13,7 +13,7 @@ from metadata import apply_meta_filters
 from sorting import apply_sorting
 
 
-def collect_logs_from_users(changes_from):
+def collect_logs_from_users(changes_from, subset=None):
     try:
         changes_from = datetime.datetime.strptime(changes_from, '%Y-%m-%d')
     except TypeError:
@@ -22,6 +22,9 @@ def collect_logs_from_users(changes_from):
 
     network = os.listdir('user')
     network_dfs = []
+    if subset:
+        network = subset
+        print("Only considering the following users:\n{}".format(network))
 
     for user_folder in network:
         list_parts = []
@@ -44,18 +47,25 @@ def collect_logs_from_users(changes_from):
                                                how='outer'), network_dfs)
 
 
-def apply_filters(df, watched=None, keep_own=False, list_filter=None):
-    default_user = open('your_username.txt', 'r').read()
+def apply_filters(df, watched=None, keep_own=False, list_filter=None,
+                  target_user=None):
+    if not target_user:
+        target_user = open('your_username.txt', 'r').read()
 
     # Watched filter
-    if watched == "y":
-        df = df.loc[df[default_user].notnull()]
-    elif watched == "n":
-        df = df.loc[df[default_user].isnull()]
+    try:
+        if watched == "y":
+            df = df.loc[df[target_user].notnull()]
+        elif watched == "n":
+            df = df.loc[df[target_user].isnull()]
+    except KeyError:
+        raise KeyError("You can't use the -w flag if the target/default user "
+                       "is not in the network or the selected users!")
 
     # Leave out own rating
     if not keep_own:
-        df = df.drop([default_user], axis=1)
+        if target_user in list(df):
+            df = df.drop([target_user], axis=1)
 
     if list_filter:
         if list_filter.startswith('http'):
@@ -141,51 +151,97 @@ def write_list_to_csv_or_txt(df, date, output_format=None):
         print(df.to_string())
 
 
-if __name__ == "__main__":
-    today = datetime.date.today()
+def main(args):
+    # Get ratings
+    df = collect_logs_from_users(args.dt, subset=args.usub)
+    df = apply_filters(df,
+                       watched=args.watched, keep_own=args.keep_own,
+                       list_filter=args.lf, target_user=args.target)
 
+    # Calculate network ratings
+    if not args.ignet:
+        df = summarize_ratings(df,
+                               min_rating=args.minr, rating_mode=args.mode,
+                               weighting=args.bw)
+
+    if args.meta:
+        df = apply_meta_filters(df,
+                                min_lrating=args.lbr,
+                                min_llogs=args.min_llogs,
+                                max_llogs=args.max_llogs,
+                                min_year=args.miny, max_year=args.maxy,
+                                min_runtime=args.mint, max_runtime=args.maxt,
+                                genre=args.gen, actor=args.ac,
+                                director=args.di, producer=args.pro,
+                                writer=args.wr, editor=args.ed,
+                                cinematography=args.ci,
+                                visual_effects=args.vfx, composer=args.com,
+                                sound=args.snd, production_design=args.pdes,
+                                costumes=args.cstm,
+                                studio=args.stu, country=args.cou,
+                                language=args.lang)
+
+    df = apply_sorting(df, flags=args.sorts)
+
+    # Select columns
+    if args.meta and args.cols:
+        selected_cols = ["title", "year"]
+        selected_cols += list(args.cols)
+        df = df[selected_cols]
+    elif args.meta:
+        # Default for enabled metadata
+        df = df[["title", "year", "nrating", "nlogs"]]
+
+    write_list_to_csv_or_txt(df, args.dt, output_format=args.out)
+
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-r", "--minr", help="minimum rating",
+    parser.add_argument("-r", help="minimum rating",
                         default=3.75, type=float, dest='minr')
-    parser.add_argument("-w", "--watched", help="exclude films you watched (n)"
+    parser.add_argument("-w", help="exclude films you watched (n)"
                         " | only consider films you watched (y)",
                         default=None, type=str, dest='watched')
+    parser.add_argument("-target", help="set target user other than default",
+                        default=None, type=str, dest='target')
     parser.add_argument("-keep_own", help="keep your own rating for averaging",
                         default=False, action='store_true', dest='keep_own')
     parser.add_argument("-list", help="filter by cloned or created list",
                         default=None, type=str, dest='lf')
-    parser.add_argument("-mode", "--rating_mode",
-                        help="average or bayesian average rating mode",
+    parser.add_argument("-ignore_net", help="consider all movies (not only "
+                        "those known to your network). This disables nrating "
+                        "and nlogs columns",
+                        default=False, action='store_true', dest='ignet')
+    parser.add_argument("-mode", help="average or bayesian rating mode",
                         default="bayesian", type=str, dest='mode')
-    parser.add_argument("-b", "--b_weighting",
-                        help="bayesian average weighting",
+    parser.add_argument("-b", help="bayesian average weighting",
                         default=None, type=float, dest='bw')
-    parser.add_argument("-o", "--out", help="output format (csv/net),\
-                        None prints to terminal (by default)",
+    parser.add_argument("-o", help="output format (csv/net), "
+                        "None prints to terminal (by default)",
                         default=None, type=str, dest='out')
-    parser.add_argument("-d", "--date",
+    parser.add_argument("-d",
                         help="date (up to when ratings should be considered)",
-                        default=today, type=str, dest='dt')
+                        default=datetime.date.today(), dest='dt')
+    parser.add_argument("-usub", help="collect logs only from a subset of "
+                        "users",
+                        default=None, nargs='*', dest='usub')
 
     # Metadata flags
-    parser.add_argument("-m", "--meta", help="include metadata",
+    parser.add_argument("-m", help="include metadata",
                         default=False, action='store_true', dest='meta')
-    parser.add_argument('-lbr', "--min_lb_rating",
-                        help="minimum rating on LB",
+    parser.add_argument('-lbr', help="minimum rating on LB",
                         default=0, type=float, dest='lbr')
-    parser.add_argument('-min_llogs', "--min_llogs",
-                        help="minimum number of logs on LB",
+    parser.add_argument('-min_llogs', help="minimum number of logs on LB",
                         default=0, type=int, dest='min_llogs')
-    parser.add_argument('-max_llogs', "--max_llogs",
-                        help="maximum number of logs on LB",
+    parser.add_argument('-max_llogs', help="maximum number of logs on LB",
                         default=10000000, type=int, dest='max_llogs')
-    parser.add_argument("-miny", "--min_year", help="earliest year",
+    parser.add_argument("-miny", help="earliest year",
                         default=1890, type=int, dest='miny')
-    parser.add_argument("-maxy", "--max_year", help="latest year",
+    parser.add_argument("-maxy", help="latest year",
                         default=2020, type=int, dest='maxy')
-    parser.add_argument("-mint", "--min_runtime", help="minimum runtime",
+    parser.add_argument("-mint", help="minimum runtime",
                         default=0, type=int, dest='mint')
-    parser.add_argument("-maxt", "--max_runtime", help="maximum runtime",
+    parser.add_argument("-maxt", help="maximum runtime",
                         default=10000, type=int, dest='maxt')
 
     parser.add_argument("-genre", help="filter by genre",
@@ -222,55 +278,12 @@ if __name__ == "__main__":
                         default=None, type=str, dest='lang')
 
     # Sorting flags
-    parser.add_argument("-sort", help="sorting the resulting list\n"
-                        "Default: nrating (network rating), nlogs "
-                        "(how many of your friends logged it)",
-                        nargs='*', default=['nrating', 'nlogs'], dest='sorts')
+    parser.add_argument("-sort", help="sorting the resulting list\n",
+                        nargs='*', default=['title_asc'], dest='sorts')
     # Column selection flags
     parser.add_argument("-cols", help="selected columns to display in list\n"
                         "Default: [title, year]\n"
                         "Look up README.md for all options",
                         nargs='+', dest='cols')
 
-    args = parser.parse_args()
-
-    # Get ratings
-    df = collect_logs_from_users(args.dt)
-    df = apply_filters(df,
-                       watched=args.watched, keep_own=args.keep_own,
-                       list_filter=args.lf)
-
-    # Calculate network ratings
-    df = summarize_ratings(df,
-                           min_rating=args.minr, rating_mode=args.mode,
-                           weighting=args.bw)
-
-    if args.meta:
-        df = apply_meta_filters(df,
-                                min_lrating=args.lbr,
-                                min_llogs=args.min_llogs,
-                                max_llogs=args.max_llogs,
-                                min_year=args.miny, max_year=args.maxy,
-                                min_runtime=args.mint, max_runtime=args.maxt,
-                                genre=args.gen, actor=args.ac,
-                                director=args.di, producer=args.pro,
-                                writer=args.wr, editor=args.ed,
-                                cinematography=args.ci,
-                                visual_effects=args.vfx, composer=args.com,
-                                sound=args.snd, production_design=args.pdes,
-                                costumes=args.cstm,
-                                studio=args.stu, country=args.cou,
-                                language=args.lang)
-
-    df = apply_sorting(df, flags=args.sorts)
-
-    # Select columns
-    if args.meta and args.cols:
-        selected_cols = ["title", "year"]
-        selected_cols += list(args.cols)
-        df = df[selected_cols]
-    elif args.meta:
-        # Default for enabled metadata
-        df = df[["title", "year", "nrating", "nlogs"]]
-
-    write_list_to_csv_or_txt(df, args.dt, output_format=args.out)
+    main(parser.parse_args())

@@ -5,6 +5,7 @@ import os
 import time
 import argparse
 import pandas as pd
+
 from bs4 import BeautifulSoup
 from urllib import request
 
@@ -62,17 +63,16 @@ def get_all_movies_from_page(user, list_title, save_dir='lists',
     if to_reverse:
         # Reverse csv
         print("\tReversing order of movies in csv...\n")
-        files = os.listdir(save_dir)
-        filename = "{}/{}".format(save_dir, files[0])
-        os.rename(filename, "{}.temp".format(filename))
-        old_csv = "{}/{}".format(save_dir, (os.listdir(save_dir))[0])
+        filename = "{}.csv".format(full_path)
+        temp_file = "{}.temp".format(filename)
+        os.rename(filename, temp_file)
 
         with open(filename, 'w') as wf:
-            with open(old_csv, 'r') as cf:
+            with open(temp_file, 'r') as cf:
                 lines = [x for x in cf]
                 for line in lines[::-1]:
                     wf.write(line)
-        os.remove(old_csv)
+        os.remove(temp_file)
 
     if return_path:
         return full_path
@@ -218,16 +218,7 @@ def traverse_network(from_user, date, start=None):
     return friends
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-u", "--from_user", help="your username",
-                        default=None, type=str, dest='user')
-    parser.add_argument("-c", "--check", help="double check existing ratings",
-                        default=False, action="store_true", dest='check')
-    parser.add_argument("-w", "--wait", help="sleep timer in seconds after "
-                        "each request", default=0, type=int, dest='wait')
-    args = parser.parse_args()
-
+def main(args):
     date = datetime.date.today()
     ufile = 'your_username.txt'
     if os.path.isfile(ufile):
@@ -244,24 +235,51 @@ if __name__ == "__main__":
     network = traverse_network(user, date)
 
     for friend in reversed(network):
-        print("_________________________")
         if args.wait:
             time.sleep(int(args.wait))
-        if not os.path.exists('user/{}'.format(friend)):
-            os.makedirs('user/{}'.format(friend))
-            print("Creating new folder and retrieving all ratings for\
-                   {}...".format(friend))
-            get_all_movies_from_page(user=friend,
-                                     list_title='films/by/date',
-                                     save_dir='user',
-                                     output_name="{}_{}".format(user, date))
+        try:
+            if not os.path.exists('user/{}'.format(friend)):
+                print("_________________________\n")
+                os.makedirs('user/{}'.format(friend))
+                print("Creating new folder and retrieving all ratings for "
+                      "{} ...".format(friend))
+                get_all_movies_from_page(user=friend,
+                                         list_title='films/by/date',
+                                         save_dir='user',
+                                         output_name="{}_{}".format(
+                                            friend, date))
 
-        else:
-            update_user(friend, 'films/by/date', date)
-            if args.check:
-                # Get initial retrieval date
-                ini_rd = sorted(list(os.listdir(
-                    'user/{}'.format(
-                        friend))))[0].strip('.csv').split('_')[-1]
-                check_ratings(friend, ini_rd)
-        print("")
+            else:
+                if not args.new:
+                    print("_________________________\n")
+                    update_user(friend, 'films/by/date', date)
+                    if args.check:
+                        # Get initial retrieval date
+                        ini_rd = sorted(list(os.listdir(
+                            'user/{}'.format(
+                                friend))))[0].strip('.csv').split('_')[-1]
+                        check_ratings(friend, ini_rd)
+        except urllib.error.HTTPError:
+            print("TIMEOUT. The Letterboxd server can't handle that many "
+                  "requests. Setting sleep timer inbetween users to 20s.\n")
+            args.wait = 20
+            last_folder_contents = os.listdir('user/{}'.format(friend))
+            os.remove(sorted(list(last_folder_contents))[-1])
+            print("Removed unfinished file.")
+            if len(last_folder_contents) == 0:
+                os.rmdir(last_folder_contents)
+                print("Removed empty user folder.")
+            print("\nRestarting...")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-u", "--from_user", help="your username",
+                        default=None, type=str, dest='user')
+    parser.add_argument("-c", "--check", help="double check existing ratings",
+                        default=False, action="store_true", dest='check')
+    parser.add_argument("-new", help="only retrieve new users",
+                        default=False, action="store_true", dest='new')
+    parser.add_argument("-w", "--wait", help="sleep timer in seconds after "
+                        "each request", default=0, type=int, dest='wait')
+    main(parser.parse_args())

@@ -32,10 +32,10 @@ def compare_csvs(old_csv, new_csv, flags):
     df = df.drop(['nrating_x', 'nlogs_x'], axis=1)
     df.columns = ['title', 'nrating', 'nlogs', 'cir', 'plus_logs']
 
-    # Filter for "rising": Above 3.00 rating and +0.05 in rating
+    # Filter for "rising": Above 3.00 rating and +0.15 in rating
     if 'rising' in flags:
         df = df.loc[df["nrating"] > 3]
-        df = df.loc[df["cir"] > 0.05]
+        df = df.loc[df["cir"] > 0.15]
 
     # Filter for "top": Sort by network rating and take top 20
     if 'top' in flags:

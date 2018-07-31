@@ -47,10 +47,15 @@ The three columns are `[title],[network_rating],[network_number_of_logs]`.
 - `-r [rating]` : The minimum rating down to which value you want the resulting list to go. By default, this is `3.75`.
 - `-w y` : Only consider movies you already logged.
 - `-w n` : Filter movies you already logged.
-- `-mode [std/bayesian]` : Choose mode of rating value calculation. `std` is the naive way where the sum of rating values is divided by the number of ratings. By default, this is `bayesian` where movies with few logs get punished.
+- `-target [username]` : Set target user other than default (yourself probably).
+- `-keep_own` : Keep your own rating for averaging. When this flag is not set, your rating is not part of the network rating calculation.
+- `-list [path/to/list]` : Filter by cloned or created list. You can also pass a URL, then this list will be cloned (see below for further instructions about cloning lists).
+- `-ignore_net` : Consider all movies (not only those known to your network). This disables nrating and nlogs columns.
+- `-mode [std | bayesian]` : Choose mode of rating value calculation. `std` is the naive way where the sum of rating values is divided by the number of ratings. By default, this is `bayesian` where movies with few logs get punished.
 - `-b [weight]` : Choose weighting for bayesian averaging. The default is the number of users in your network divided by 100. This has no effect when `mode` is set to `std`.
-- `-o [csv/net]` : Without the `-o` flag, the list is simply printed to your terminal in full. `csv` saves the list to a file with the columns mentioned above. See below for `net`.
+- `-o [csv | net]` : Without the `-o` flag, the list is simply printed to your terminal in full. `csv` saves the list to a file with the columns mentioned above. See below for `net`.
 - `-d [date]` : Date up to when ratings should be considered. This is useful for producing rankings from previous updates.
+- `-usub [user1 user2 ...]` : Collect logs only from a subset of users.
 
 
 ## Download metadata and enable filters
@@ -66,7 +71,7 @@ By default, this takes the csv file in the `lists` directory with the latest dat
 - `-f` : Select another csv file
 - `-refresh` : Download HTMLs again (limit: once per day). The older file gets moved into a sub directory which has the "last-modified" date as its name.
 - `-w [seconds]` : Sleep timer after each request
-- `-cols [col1] [col2]` : Specify which columns the csv file has
+- `-cols [col1] [col2]` : Specify which columns the csv file has. Default: `title`, `rating`, `num_logs`.
 
 Now you can use the following flags with `ranking.py`:
 - `-m` (required for flags below) : Include metadata. At the moment, this is by default `[year],[letterboxd_average_rating],[letterboxd_number_of_logs],[list_of_genres]`
@@ -139,6 +144,11 @@ python3 ratings.py -c
 ```
 The `-c` flag is for updating the ratings in case they changed after a rewatch or adding the rating few days after simply logging it (rating 0). It makes absolutely sure that no movie is ignored and also keeps the ratings in case someone deleted them (to 0).
 
+Other flags:
+- `-u` : Username to retrieve ratings (from network) for. Without it, the default user is selected.
+- `-new` : Only retrieve newly added users and do not check already existing users in the database for new ratings.
+- `-w` : Sleep timer in seconds after each request.
+
 
 ## Find out popular movies with your friends since last update
 
@@ -158,8 +168,36 @@ Using the `-flags` option, you can (currently) choose from three different hype 
 
 ## Download your watchlist or other lists on Letterboxd
 
-Run `python3 clone_list.py <URL>` to clone a list from Letterboxd.
+Run `python3 clone_list.py -url <URL>` to clone a list from Letterboxd.
+You can specify the directory to save the list to via the `-save_dir` flag.
 
 Run `python3 ladle.py -f <path/to/csv/file> -r 0` to download the necessary metadata that is not already in the `moviedata` directory.
 
-Or you can run `python3 ranking.py -list <path/to/csv/file>` to filter all ratings by this list.
+You can run `python3 ranking.py -list <path/to/csv/file>` to filter all ratings by this list.
+
+
+## Compare users / Calculate ratings and diary similarity to all your friends
+
+One WIP script gives you a table of all users in your `users` directory featuring two major similarity measures. 
+
+One is called `match_%` which shows how much of your (or `-u`'s) film catalog this friend also watched. The `rmatch_%` column shows the opposite: How many of their films you (or `-u`) watched. To some degree, both these columns are being averaged in the `total` calculation.
+
+The second one is `rats_sim` which is a measure of how similar your ratings are to theirs. The `nz_rats` column shows how many of their ratings are non-zero. This is to account for some users who don't rate films. `rats_sim`'s impact in the total result is dependant on the `nz_rats` vlaue.
+
+The `total` column then shows some sort of average between these two major components.
+
+`python3 compare_users.py -u <USER>`
+has the following options:
+- `-lb` : Set lower bound for ratings of the user for matches (`match_%` and `rmatch_%`). Default is 8.
+- `-tol` : Set ratings similarity (`rats_sim`) tolerance, i.e. small ratings differences are ignored. Default is 2.
+- `-mrm` : Match reverse-match weight. Default is 0.75, i.e. the `match_%` has 75% while the `rmatch_%` has 25% on the `avg_match_%` calculation.
+- `-fac` : Total (avg match % vs. ratings similarity) factor. Default is 0.25.
+
+
+## Search function (WIP)
+
+`python3 search.py -q <MOVIE>` (where the movie is in the sub URL format, e.g. `blue-is-the-warmest-color`)
+
+prints the full database entry of a movie to your terminal.
+
+In the future, this will also show the ratings of all network users.

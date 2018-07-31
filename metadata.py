@@ -18,8 +18,11 @@ def apply_meta_filters(df, min_lrating=None, min_llogs=None, max_llogs=None,
     # Retrieve all the metadata
     df = df.apply(get_movie_info, axis=1)
     # Remove NaN-year entries
-    df = df.dropna(subset=['year'], how='any')
-    df["year"] = df["year"].apply(int)
+    try:
+        df = df.dropna(subset=['year'], how='any')
+        df["year"] = df["year"].apply(int)
+    except KeyError:
+        raise KeyError("No results. Try using less strict filters.")
 
     # Filter by LB rating
     if min_lrating:
@@ -66,7 +69,8 @@ def get_movie_info(df):
     title = df["title"]
 
     try:
-        with open('moviedata/{}/{}.html'.format(title, title), 'r') as mf:
+        meta_file = 'moviedata/{}/{}.html'.format(title, title)
+        with open(meta_file, 'r') as mf:
             contents = mf.read()
             soup = BeautifulSoup(contents, 'html.parser')
     except FileNotFoundError:

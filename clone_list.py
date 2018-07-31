@@ -17,7 +17,7 @@ def clone(full_url, clones_dir='lists/cloned', return_filename=False):
     url_parts = full_url.split('/')
     if len(url_parts) > 2:
         user, list_str, url_end = url_parts
-        list_title = "{}/{}".format(user, list_str)
+        list_title = "{}/{}".format(list_str, url_end)
     else:
         # Person (e.g. director) page
         # (Not very intuitive var naming here)
