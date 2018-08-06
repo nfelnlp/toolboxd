@@ -5,7 +5,34 @@ from collections import defaultdict
 
 def str_filter(df, sf, sfv):
     df = df.dropna(subset=[sf])
-    return df.loc[df[sf].apply(lambda x: sfv in x)]
+    return df.loc[df[sf].apply(lambda x: str_filter_func(x, sfv))]
+
+
+def str_filter_func(x, sfv):
+    checks, neg_checks = [], []
+    for kw in sfv:
+        fits = False
+        # Not this keyword
+        if kw.startswith('^'):
+            kw = kw[1:]
+            if kw not in x:
+                fits = True
+            neg_checks.append(fits)
+        # Only this keyword or combine multiple (all must be true)
+        elif kw.startswith('°'):
+            kw = kw[1:]
+            if len(x) == 1:
+                if kw in x:
+                    fits = True
+            neg_checks.append(fits)
+        # Contains this keyword
+        else:
+            if kw in x:
+                fits = True
+            checks.append(fits)
+    if len(checks) == 0:
+        checks.append(True)
+    return all([any(checks), all(neg_checks)])
 
 
 def apply_meta_filters(df, min_lrating=None, min_llogs=None, max_llogs=None,
@@ -76,6 +103,9 @@ def get_movie_info(df):
     except FileNotFoundError:
         return df
 
+    # KEEP LETTERBOXD URI
+    df["LetterboxdURI"] = title
+
     # ACTUAL TITLE
     df["title"] = soup.find('span', class_='frame-title').text.strip()
 
@@ -139,7 +169,7 @@ def get_movie_info(df):
     # IMDb ID
     for link in soup.find_all('a'):
         if link.text.strip() == "IMDb":
-            df["imdb"] = "tt"+link['href'].split(
+            df["imdbID"] = "tt"+link['href'].split(
                 '/title/')[1].strip('/maindetails')
             break
 

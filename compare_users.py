@@ -60,7 +60,7 @@ def calculate_total(col, mrm_weight, factor):
     return total
 
 
-def main(args):
+def make_comp_table(user, lb=8, tol=2, mrm=.75, fac=.25):
     today = datetime.date.today()
     df = collect_logs_from_users(today)
 
@@ -78,13 +78,23 @@ def main(args):
 
     stats["total"] = stats.apply(lambda x: calculate_total(
         x, args.mrm, args.fac), axis=1)
+
+    # Add user with 1.0
+    stats = stats.append({'user2': args.user,
+                          'match_%': 1,
+                          'rmatch_%': 1,
+                          'rats_sim': 1,
+                          'nz_rats': 1,
+                          'total': 1}, ignore_index=True)
     print("lower bound for ratings for matches: {}\n"
           "ratings similarity tolerance: {}\n"
           "match reverse-match factor: {}\n"
           "total (avg match vs. ratings similarity) factor: {}\n".format(
             args.lb, args.tol, args.mrm, args.fac))
+    stats = stats.sort_values('total', ascending=False)
+    print(stats.to_string())
 
-    print(stats.sort_values('total', ascending=False).to_string())
+    return stats, today
 
 
 if __name__ == "__main__":
@@ -101,4 +111,9 @@ if __name__ == "__main__":
     parser.add_argument("-fac", help="total (avg match vs. ratings similarity)"
                         " factor/weight",
                         default=0.25, type=float, dest='fac')
-    main(parser.parse_args())
+    args = parser.parse_args()
+
+    stats, date = make_comp_table(args.user, args.lb, args.tol, args.mrm,
+                                  args.fac)
+    stats.to_csv('stats/{}_comparison_{}.csv'.format(args.user, date),
+                 sep=',', index=False)

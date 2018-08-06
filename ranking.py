@@ -13,7 +13,7 @@ from metadata import apply_meta_filters
 from sorting import apply_sorting
 
 
-def collect_logs_from_users(changes_from, subset=None):
+def collect_logs_from_users(changes_from, subset=None, user_sim=False):
     try:
         changes_from = datetime.datetime.strptime(changes_from, '%Y-%m-%d')
     except TypeError:
@@ -39,10 +39,25 @@ def collect_logs_from_users(changes_from, subset=None):
             user_films = pd.concat(
                 list_parts, ignore_index=True).drop_duplicates(
                 subset='title', keep='last').reset_index(drop=True)
+
+            print("\t{}\t".format(user_folder), end='\r')
+            if user_sim:
+                comp_t = pd.read_csv("stats/{}".format(
+                    list(sorted(os.listdir('stats')))[-1]), sep=',')
+                w_adjust = ((len(comp_t) - comp_t["total"].sum()-2)
+                            / (len(comp_t)-1))
+
+                sim_w = (comp_t["total"].loc[comp_t['user2'] == user_folder]
+                         + w_adjust)
+                print(round(float(sim_w), 2), end='\r')
+                user_films[user_folder] = user_films[user_folder].apply(
+                    lambda x: x * sim_w)
+            print("")
             network_dfs.append(user_films)
         except ValueError:
             print("No entries for {}".format(user_folder))
 
+    print("")
     return reduce(lambda left, right: pd.merge(left, right, on='title',
                                                how='outer'), network_dfs)
 
@@ -68,14 +83,24 @@ def apply_filters(df, watched=None, keep_own=False, list_filter=None,
             df = df.drop([target_user], axis=1)
 
     if list_filter:
+        neg = None
+        if len(list_filter) == 2:
+            list_filter, neg = list_filter[0], list_filter[1]
+        else:
+            list_filter = list_filter[0]
+
         if list_filter.startswith('http'):
             print("Cloning list from Letterboxd...")
             list_csv = clone(list_filter, return_filename=True)
         else:
             list_csv = list_filter
+
         list_df = pd.read_csv(list_csv, sep=r'\t', usecols=["title"],
                               names=["title"], engine='python')
-        df = pd.merge(df, list_df, on='title', how='right')
+        if neg:
+            df = df[~df['title'].isin(list_df['title'])]
+        else:
+            df = pd.merge(df, list_df, on='title', how='right')
     return df
 
 
@@ -97,8 +122,7 @@ def calculate_avg(ratings, minimum=0, mean_total=0, mode="std"):
                          * mean_total)/2, 2)
 
 
-def summarize_ratings(df, min_rating=3.75,
-                      rating_mode="bayesian", weighting=None):
+def summarize_ratings(df, min_rating=3.75, rating_mode="bayesian", bw=None):
     # Generate ratings lists and number of logs in network
     df["ratings"] = df.drop(["title"], axis=1).values.tolist()
     df["ratings"] = df["ratings"].apply(
@@ -107,8 +131,8 @@ def summarize_ratings(df, min_rating=3.75,
 
     # Rating mode (average / bayesian)
     if rating_mode == "bayesian":
-        if weighting:
-            b_weighting = weighting
+        if bw:
+            b_weighting = bw
         else:
             b_weighting = 1/100 * len(df.drop(["title", "nlogs", "ratings"],
                                               axis=1).keys())
@@ -137,8 +161,9 @@ def summarize_ratings(df, min_rating=3.75,
 
 def write_list_to_csv_or_txt(df, date, output_format=None):
     if output_format == 'net':
-        filename = 'lists/network_{}.csv'.format(date)
-        df[["title", "year", "nrating"]].to_csv(
+        file_id = input("\nPlease provide a filename: ")
+        filename = 'lists/{}.csv'.format(file_id)
+        df[["title", "year", "imdbID"]].to_csv(
             filename, sep=',', index=False)
         print("Created Letterboxd-importable file {}.".format(filename))
     elif output_format == 'csv':
@@ -149,22 +174,30 @@ def write_list_to_csv_or_txt(df, date, output_format=None):
         print("Created csv file {}.".format(filename))
     else:
         print(df.to_string())
+        dec = input("\nDo you want to save this table as a .txt file?\n")
+        if dec == "y" or dec == "yes":
+            file_id = input("Please provide a filename: ")
+            with open('lists/{}.txt'.format(file_id), 'w') as lof:
+                lof.write(df.to_string())
 
 
 def main(args):
-    # Get ratings
-    df = collect_logs_from_users(args.dt, subset=args.usub)
+    print("Collecting ratings...")
+    df = collect_logs_from_users(args.dt, subset=args.usub,
+                                 user_sim=args.user_sim)
+    print("Applying rating filters...")
     df = apply_filters(df,
                        watched=args.watched, keep_own=args.keep_own,
                        list_filter=args.lf, target_user=args.target)
 
-    # Calculate network ratings
     if not args.ignet:
+        print("Calculating network ratings...")
         df = summarize_ratings(df,
                                min_rating=args.minr, rating_mode=args.mode,
-                               weighting=args.bw)
+                               bw=args.bw)
 
     if args.meta:
+        print("Applying metadata filters...")
         df = apply_meta_filters(df,
                                 min_lrating=args.lbr,
                                 min_llogs=args.min_llogs,
@@ -181,17 +214,20 @@ def main(args):
                                 studio=args.stu, country=args.cou,
                                 language=args.lang)
 
+    print("Sorting...")
     df = apply_sorting(df, flags=args.sorts)
 
-    # Select columns
+    print("Selecting columns...")
     if args.meta and args.cols:
         selected_cols = ["title", "year"]
         selected_cols += list(args.cols)
         df = df[selected_cols]
     elif args.meta:
         # Default for enabled metadata
-        df = df[["title", "year", "nrating", "nlogs"]]
+        if args.out != "net":
+            df = df[["title", "year", "nrating", "nlogs"]]
 
+    print("Finished.")
     write_list_to_csv_or_txt(df, args.dt, output_format=args.out)
 
 
@@ -206,8 +242,9 @@ if __name__ == "__main__":
                         default=None, type=str, dest='target')
     parser.add_argument("-keep_own", help="keep your own rating for averaging",
                         default=False, action='store_true', dest='keep_own')
-    parser.add_argument("-list", help="filter by cloned or created list",
-                        default=None, type=str, dest='lf')
+    parser.add_argument("-list", help="filter by cloned or created list,"
+                        "add ^ behind path or URL to negate",
+                        default=None, nargs='*', dest='lf')
     parser.add_argument("-ignore_net", help="consider all movies (not only "
                         "those known to your network). This disables nrating "
                         "and nlogs columns",
@@ -225,6 +262,8 @@ if __name__ == "__main__":
     parser.add_argument("-usub", help="collect logs only from a subset of "
                         "users",
                         default=None, nargs='*', dest='usub')
+    parser.add_argument("-user_sim", help="weight ratings by user similarity",
+                        default=False, action='store_true', dest='user_sim')
 
     # Metadata flags
     parser.add_argument("-m", help="include metadata",
@@ -245,7 +284,7 @@ if __name__ == "__main__":
                         default=10000, type=int, dest='maxt')
 
     parser.add_argument("-genre", help="filter by genre",
-                        default=None, type=str, dest='gen')
+                        default=None, nargs='*', dest='gen')
     parser.add_argument("-actor", help="filter by actor",
                         default=None, type=str, dest='ac')
     parser.add_argument("-director", help="filter by director",
@@ -279,7 +318,7 @@ if __name__ == "__main__":
 
     # Sorting flags
     parser.add_argument("-sort", help="sorting the resulting list\n",
-                        nargs='*', default=['title_asc'], dest='sorts')
+                        nargs='+', default=['title_asc'], dest='sorts')
     # Column selection flags
     parser.add_argument("-cols", help="selected columns to display in list\n"
                         "Default: [title, year]\n"
