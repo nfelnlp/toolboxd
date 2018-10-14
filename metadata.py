@@ -122,9 +122,12 @@ def get_movie_info(df):
         df["diff"] = None
 
     # NUMBER OF LETTERBOXD USERS WHO WATCHED IT
-    logs_str = soup.find('li', class_='filmstat-watches').find(
-        'a')['title'].split()[2]
-    df["llogs"] = int(logs_str.replace(',', ''))
+    try:
+        logs_str = soup.find('li', class_='filmstat-watches').find(
+            'a')['title'].split()[2]
+        df["llogs"] = int(logs_str.replace(',', ''))
+    except AttributeError:
+        df["llogs"] = 0
 
     # RELEASE YEAR
     try:

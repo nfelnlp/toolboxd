@@ -10,6 +10,8 @@ import urllib
 from bs4 import BeautifulSoup
 from urllib import request
 
+from ladle import save_soup
+
 
 def get_all_movies_from_page(user, list_title, save_dir='lists',
                              output_name=None, with_ratings=True,
@@ -24,33 +26,32 @@ def get_all_movies_from_page(user, list_title, save_dir='lists',
                             quoting=csv.QUOTE_MINIMAL)
         page = 1
         while True:
-            with request.urlopen('http://letterboxd.com/{}/{}/page/{}/'.format(
-                    user, list_title, page)) as response:
-                html = response.read()
-                soup = BeautifulSoup(html, 'html.parser')
+            if create_meta_file:
+                soup = save_soup('http://letterboxd.com/{}/{}/page/{}/'.format(
+                                    user, list_title, page),
+                                 '{}_META.html'.format(full_path))
+                create_meta_file = False
+            else:
+                soup = save_soup('http://letterboxd.com/{}/{}/page/{}/'.format(
+                                    user, list_title, page),
+                                 None)
 
-                if create_meta_file:
-                    with open('{}_META.html'.format(
-                            full_path), 'w') as lmf:
-                        lmf.write(soup.prettify())
-                    create_meta_file = False
+            # Find all movie posters / links on this page
+            movie_li = [lm for lm in soup.find_all(
+                'li', class_='poster-container')]
 
-                # Find all movie posters / links on this page
-                movie_li = [lm for lm in soup.find_all(
-                    'li', class_='poster-container')]
+            for mov in movie_li:
+                write_stuff = []
 
-                for mov in movie_li:
-                    write_stuff = []
+                # Retrieve title
+                write_stuff.append(mov.div['data-target-link'].split(
+                    '/')[2])
 
-                    # Retrieve title
-                    write_stuff.append(mov.div['data-target-link'].split(
-                        '/')[2])
+                # Retrieve rating
+                if with_ratings:
+                    write_stuff.append(mov['data-owner-rating'])
 
-                    # Retrieve rating
-                    if with_ratings:
-                        write_stuff.append(mov['data-owner-rating'])
-
-                    writer.writerow(write_stuff)
+                writer.writerow(write_stuff)
 
             print("\tPage {} : {} movies".format(page, len(movie_li)))
             try:
@@ -92,12 +93,11 @@ def update_user(user, list_type, date):
         for row in reader:
             last_addition = row[0]
             if str(last_addition).startswith('film:'):
-                with request.urlopen('http://letterboxd.com/film/{}/'.format(
-                        last_addition)) as response:
-                    print("Retrieving new title for {} ...".format(
+                print("Retrieving new title for {} ...".format(
                         last_addition))
-                    html = response.read()
-                    soup = BeautifulSoup(html, 'html.parser')
+                soup = save_soup('http://letterboxd.com/film/{}/'.format(
+                                    last_addition),
+                                 None)
                 last_addition = soup.find(
                     'meta', property='og:url')['content'].split('/')[-2]
 
@@ -106,34 +106,32 @@ def update_user(user, list_type, date):
         writer = csv.writer(wcsv, delimiter='\t', quotechar='|',
                             quoting=csv.QUOTE_MINIMAL)
 
-        with request.urlopen('http://letterboxd.com/{}/{}/'.format(
-                user, list_type)) as response:
-            html = response.read()
-            soup = BeautifulSoup(html, 'html.parser')
+        soup = save_soup('http://letterboxd.com/{}/{}/'.format(
+                            user, list_type),
+                         None)
+        # Find all movie posters / links on this page
+        movie_li = [lm for lm in soup.find_all(
+            'li', class_='poster-container')]
 
-            # Find all movie posters / links on this page
-            movie_li = [lm for lm in soup.find_all(
-                'li', class_='poster-container')]
+        new_num = 0
+        new_additions = []
+        for mov in movie_li:
+            # Retrieve metadata for each movie
+            this_user_rating = mov['data-owner-rating']
+            mov_str = mov.div['data-target-link'].split('/')[2]
 
-            new_num = 0
-            new_additions = []
-            for mov in movie_li:
-                # Retrieve metadata for each movie
-                this_user_rating = mov['data-owner-rating']
-                mov_str = mov.div['data-target-link'].split('/')[2]
+            # If the current movie is already in the csv, cancel here
+            if last_addition == mov_str:
+                break
 
-                # If the current movie is already in the csv, cancel here
-                if last_addition == mov_str:
-                    break
+            new_additions.append((mov_str, this_user_rating))
+            print("\tAdded {} (Rating: {}).".format(
+                mov_str, this_user_rating))
+            new_num += 1
+            time.sleep(1)
 
-                new_additions.append((mov_str, this_user_rating))
-                print("\tAdded {} (Rating: {}).".format(
-                    mov_str, this_user_rating))
-                new_num += 1
-                time.sleep(1)
-
-            for upd in reversed(new_additions):
-                writer.writerow([upd[0], upd[1]])
+        for upd in reversed(new_additions):
+            writer.writerow([upd[0], upd[1]])
 
     # Delete file if empty
     if os.stat(new_csv).st_size == 0:
@@ -159,51 +157,40 @@ def check_ratings(user_folder, initial_retrieval_date):
     page_num = 1
     rating_time = first_csv_date
     while True:
-        lb_url = 'http://letterboxd.com'
-        with request.urlopen('{}/{}/films/ratings/page/{}'.format(
-                lb_url, user_folder, page_num)) as response:
-            html = response.read()
-            soup = BeautifulSoup(html, 'html.parser')
+        lb_url = ''
 
-            # Find all movie posters / links on this page
-            movie_li = [lm for lm in soup.find_all(
-                'li', class_='poster-container')]
-            if len(movie_li) == 0:
-                break
+        soup = save_soup(
+            'http://letterboxd.com/{}/films/ratings/page/{}'.format(
+                user_folder, page_num),
+            None)
 
-            for mov in movie_li:
-                # Retrieve metadata for each rating/movie
-                rating_time = mov.find('time')['datetime'].split('T')[0]
+        # Find all movie posters / links on this page
+        movie_li = [lm for lm in soup.find_all(
+            'li', class_='poster-container')]
+        if len(movie_li) == 0:
+            break
 
-                if rating_time < last_csv_date:
-                    this_user_rating = mov.find(
-                        'meta', itemprop='ratingValue')['content']
-                    mov_str = mov.div['data-target-link'].split('/')[2]
+        for mov in movie_li:
+            # Retrieve metadata for each rating/movie
+            rating_time = mov.find('time')['datetime'].split('T')[0]
 
-                    # Check with database
-                    try:
-                        db_r = db[db['title'] == mov_str][user_folder].iloc[0]
-                        if (
-                                int(db_r) != int(this_user_rating)
-                                and int(this_user_rating) != 0
-                                and rating_time > initial_retrieval_date):
-                            time.sleep(1)
-                            print("\tUpdated {} (Rating: {}, "
-                                  "previously: {}) in csv {}.".format(
-                                    mov_str, this_user_rating, db_r,
-                                    rating_time))
-                            with open('user/{}/{}_{}.csv'.format(
-                                    user_folder, user_folder, rating_time),
-                                    'a+') as wcsv:
-                                writer = csv.writer(wcsv, delimiter='\t',
-                                                    quotechar='|',
-                                                    quoting=csv.QUOTE_MINIMAL)
-                                writer.writerow([mov_str, this_user_rating])
+            if rating_time < last_csv_date:
+                this_user_rating = mov.find(
+                    'meta', itemprop='ratingValue')['content']
+                mov_str = mov.div['data-target-link'].split('/')[2]
 
-                    except IndexError:
+                # Check with database
+                try:
+                    db_r = db[db['title'] == mov_str][user_folder].iloc[0]
+                    if (
+                            int(db_r) != int(this_user_rating)
+                            and int(this_user_rating) != 0
+                            and rating_time > initial_retrieval_date):
                         time.sleep(1)
-                        print("\tAdded {} (Rating: {}).".format(
-                            mov_str, this_user_rating))
+                        print("\tUpdated {} (Rating: {}, "
+                              "previously: {}) in csv {}.".format(
+                                mov_str, this_user_rating, db_r,
+                                rating_time))
                         with open('user/{}/{}_{}.csv'.format(
                                 user_folder, user_folder, rating_time),
                                 'a+') as wcsv:
@@ -211,6 +198,21 @@ def check_ratings(user_folder, initial_retrieval_date):
                                                 quotechar='|',
                                                 quoting=csv.QUOTE_MINIMAL)
                             writer.writerow([mov_str, this_user_rating])
+
+                except IndexError:
+                    time.sleep(2)
+                    print("\tAdded {}.".format(mov_str), end='\r')
+                    if this_user_rating != 0:
+                        print(this_user_rating)
+                    else:
+                        print("")
+                    with open('user/{}/{}_{}.csv'.format(
+                            user_folder, user_folder, rating_time),
+                            'a+') as wcsv:
+                        writer = csv.writer(wcsv, delimiter='\t',
+                                            quotechar='|',
+                                            quoting=csv.QUOTE_MINIMAL)
+                        writer.writerow([mov_str, this_user_rating])
 
         page_num += 1
         if rating_time <= initial_retrieval_date:
@@ -224,16 +226,13 @@ def traverse_network(from_user, date, start=None):
     while True:
         if start is not None:
             page_num = start
-        with request.urlopen(
-                'http://letterboxd.com/{}/following/page/{}/'.format(
-                    from_user, page_num)) as response:
-            html = response.read()
-            soup = BeautifulSoup(html, 'html.parser')
-
-            friends += [lm['href'].strip('/') for lm in soup.find_all(
-                'a', class_='avatar -a40')]
-            if not soup.find('a', class_='next'):
-                break
+        soup = save_soup('http://letterboxd.com/{}/following/page/{}/'.format(
+                            from_user, page_num),
+                         None)
+        friends += [lm['href'].strip('/') for lm in soup.find_all(
+            'a', class_='avatar -a40')]
+        if not soup.find('a', class_='next'):
+            break
         page_num += 1
     return friends
 

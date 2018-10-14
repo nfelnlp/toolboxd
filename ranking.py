@@ -6,10 +6,13 @@ import numpy as np
 import argparse
 from functools import reduce
 from bs4 import BeautifulSoup
+from math import pow
 from urllib import request
 
 from clone_list import clone
+from imdb import apply_imdb_filter
 from metadata import apply_meta_filters
+from service_prime import check_lang
 from sorting import apply_sorting
 
 
@@ -26,6 +29,15 @@ def collect_logs_from_users(changes_from, subset=None, user_sim=False):
         network = subset
         print("Only considering the following users:\n{}".format(network))
 
+    if user_sim:
+        comp_t = pd.read_csv("stats/{}".format(
+                    list(sorted(os.listdir('stats')))[-1]), sep=',')
+        sum_total = comp_t["total"].sum()-1
+        num_users = len(comp_t)-1
+        w_adjust = ((num_users - sum_total)
+                    / num_users)
+
+    weights_check = 0
     for user_folder in network:
         list_parts = []
         for user_csv in sorted(os.listdir('user/{}'.format(user_folder))):
@@ -42,13 +54,10 @@ def collect_logs_from_users(changes_from, subset=None, user_sim=False):
 
             print("\t{}\t".format(user_folder), end='\r')
             if user_sim:
-                comp_t = pd.read_csv("stats/{}".format(
-                    list(sorted(os.listdir('stats')))[-1]), sep=',')
-                w_adjust = ((len(comp_t) - comp_t["total"].sum()-2)
-                            / (len(comp_t)-1))
-
                 sim_w = (comp_t["total"].loc[comp_t['user2'] == user_folder]
                          + w_adjust)
+                #sim_w = sim_w**3
+                weights_check += float(sim_w)
                 print(round(float(sim_w), 2), end='\r')
                 user_films[user_folder] = user_films[user_folder].apply(
                     lambda x: x * sim_w)
@@ -57,6 +66,7 @@ def collect_logs_from_users(changes_from, subset=None, user_sim=False):
         except ValueError:
             print("No entries for {}".format(user_folder))
 
+    #print(weights_check)
     print("")
     return reduce(lambda left, right: pd.merge(left, right, on='title',
                                                how='outer'), network_dfs)
@@ -214,8 +224,17 @@ def main(args):
                                 studio=args.stu, country=args.cou,
                                 language=args.lang)
 
+    if args.sv:
+        df = apply_imdb_filter(df, args.sv)
+        if args.sv == "prime":
+            df = check_lang(df)
+
     print("Sorting...")
     df = apply_sorting(df, flags=args.sorts)
+
+    df["nrating"] = df["nrating"]*20
+    fac = 100/(df.iloc[0]["nrating"])
+    df["nrating"] = round(fac*df["nrating"]).astype(int)
 
     print("Selecting columns...")
     if args.meta and args.cols:
@@ -245,6 +264,9 @@ if __name__ == "__main__":
     parser.add_argument("-list", help="filter by cloned or created list,"
                         "add ^ behind path or URL to negate",
                         default=None, nargs='*', dest='lf')
+    parser.add_argument("-service", help="Filter by Netflix / Prime "
+                        "availability",
+                        default=None, dest='sv')
     parser.add_argument("-ignore_net", help="consider all movies (not only "
                         "those known to your network). This disables nrating "
                         "and nlogs columns",

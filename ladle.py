@@ -9,21 +9,47 @@ from urllib import request
 from bs4 import BeautifulSoup
 
 
-def get_html(title, target_file, marker=""):
-    print("=> {}\t{}".format(title, marker))
-    with request.urlopen('http://letterboxd.com/film/{}/'.format(
-                            title)) as response:
+def save_soup(url, filename):
+    with request.urlopen(url) as response:
         html = response.read()
         soup = BeautifulSoup(html, 'html.parser')
+        if filename is not None:
+            with open(filename, 'w') as wf:
+                wf.write(soup.prettify())
+    return soup
 
-        with open(target_file, 'w') as mdf:
-            mdf.write(soup.prettify())
+
+def lb_search_film(imdbID):
+    soup = save_soup(
+        'http://letterboxd.com/search/films/{}/'.format(
+            imdbID),
+        None)
+    for ref in soup.find_all('a'):
+        if ref['href'].startswith('/film/'):
+            title = ref['href'].split('/')[-2]
+    try:
+        title
+    except UnboundLocalError:
+        return
+
+    target_dir = 'moviedata/{}'.format(title)
+    target_file = '{}/{}.html'.format(target_dir, title)
+
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
+    get_html(title, target_file)
+
+
+def get_html(title, target_file, marker=""):
+    print("=> {}\t{}".format(title, marker))
+    save_soup('http://letterboxd.com/film/{}/'.format(title),
+              target_file)
 
 
 def save_html(df, min_rating=3.75, refresh=False, wait_secs=0):
     title = df["title"]
 
-    if df["rating"] < min_rating:
+    if df["rating"] <= min_rating:
         return
 
     target_dir = 'moviedata/{}'.format(title)
